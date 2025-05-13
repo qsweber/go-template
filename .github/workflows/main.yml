@@ -18,7 +18,7 @@ jobs:
       - uses: actions/upload-artifact@v4.6.2
         with:
           name: build
-          path: ./build/handler.zip
+          path: ./handler.zip
   deploy_dev:
     runs-on: ubuntu-latest
     environment: dev
