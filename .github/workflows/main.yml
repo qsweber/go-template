@@ -26,3 +26,7 @@ jobs:
       - uses: actions/download-artifact@v4.3.0
         with:
           name: build
+      - uses: pulumi/actions@v4
+      - run: cd infrastructure && pulumi login ${{ secrets.PULUMI_CLOUD_URL }} && cd ..
+      - run: cd infrastructure && pulumi preview --stack dev --non-interactive --expect-no-changes && cd ..
+
