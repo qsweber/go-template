@@ -85,7 +85,7 @@ func main() {
 			Handler: pulumi.String("bootstrap"),
 			Role:    role.Arn,
 			Runtime: pulumi.String("provided.al2"),
-			Code:    pulumi.NewFileArchive("../handler/handler.zip"),
+			Code:    pulumi.NewFileArchive("../handler.zip"),
 		}
 
 		// Create the lambda using the args.
