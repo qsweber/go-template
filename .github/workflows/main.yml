@@ -32,6 +32,7 @@ jobs:
         with:
           name: build
       - uses: pulumi/actions@v4
+      - run: ls handler.zip
       - run: cd infrastructure && pulumi login ${{ secrets.PULUMI_CLOUD_URL }} && cd ..
       - run: cd infrastructure && pulumi up --stack dev --non-interactive --yes && cd ..
     env:
