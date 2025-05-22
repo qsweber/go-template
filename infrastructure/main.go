@@ -66,8 +66,10 @@ func main() {
 			return err
 		}
 
+		projectStackName := ctx.Project() + "-" + ctx.Stack()
+
 		// Create an IAM role.
-		role, err := iam.NewRole(ctx, "task-exec-role", &iam.RoleArgs{
+		role, err := iam.NewRole(ctx, projectStackName+"-task-exec-role", &iam.RoleArgs{
 			AssumeRolePolicy: pulumi.String(RolePolicy),
 		})
 		if err != nil {
@@ -75,24 +77,21 @@ func main() {
 		}
 
 		// Attach a policy to allow writing logs to CloudWatch
-		logPolicy, err := iam.NewRolePolicy(ctx, "lambda-log-policy", &iam.RolePolicyArgs{
+		logPolicy, err := iam.NewRolePolicy(ctx, projectStackName+"-lambda-log-policy", &iam.RolePolicyArgs{
 			Role:   role.Name,
 			Policy: pulumi.String(LogPolicy),
 		})
 
-		// Set arguments for constructing the function resource.
-		args := &lambda.FunctionArgs{
-			Handler: pulumi.String("bootstrap"),
-			Role:    role.Arn,
-			Runtime: pulumi.String("provided.al2"),
-			Code:    pulumi.NewFileArchive("../handler.zip"),
-		}
-
 		// Create the lambda using the args.
 		function, err := lambda.NewFunction(
 			ctx,
-			ctx.Project(),
-			args,
+			projectStackName+"-function",
+			&lambda.FunctionArgs{
+				Handler: pulumi.String("bootstrap"),
+				Role:    role.Arn,
+				Runtime: pulumi.String("provided.al2"),
+				Code:    pulumi.NewFileArchive("../handler.zip"),
+			},
 			pulumi.DependsOn([]pulumi.Resource{logPolicy}),
 		)
 		if err != nil {
@@ -100,9 +99,9 @@ func main() {
 		}
 
 		// Create a new API Gateway.
-		gateway, err := apigateway.NewRestApi(ctx, ctx.Project(), &apigateway.RestApiArgs{
-			Name:        pulumi.String(ctx.Project()),
-			Description: pulumi.String("An API Gateway for the UpperCase function"),
+		gateway, err := apigateway.NewRestApi(ctx, projectStackName+"-api", &apigateway.RestApiArgs{
+			Name:        pulumi.String(projectStackName + "-api"),
+			Description: pulumi.String("An API Gateway for the " + projectStackName + " function"),
 			Policy:      pulumi.String(GatewayPolicy)})
 		if err != nil {
 			return err
@@ -110,7 +109,7 @@ func main() {
 
 		// Add a resource to the API Gateway.
 		// This makes the API Gateway accept requests on "/{message}".
-		apiresource, err := apigateway.NewResource(ctx, "UpperAPI", &apigateway.ResourceArgs{
+		apiresource, err := apigateway.NewResource(ctx, projectStackName+"-gateway-resource", &apigateway.ResourceArgs{
 			RestApi:  gateway.ID(),
 			PathPart: pulumi.String("{proxy+}"),
 			ParentId: gateway.RootResourceId,
@@ -120,7 +119,7 @@ func main() {
 		}
 
 		// Add a method to the API Gateway.
-		_, err = apigateway.NewMethod(ctx, "AnyMethod", &apigateway.MethodArgs{
+		_, err = apigateway.NewMethod(ctx, projectStackName+"-any-method", &apigateway.MethodArgs{
 			HttpMethod:    pulumi.String("ANY"),
 			Authorization: pulumi.String("NONE"),
 			RestApi:       gateway.ID(),
@@ -132,7 +131,7 @@ func main() {
 
 		// Add an integration to the API Gateway.
 		// This makes communication between the API Gateway and the Lambda function work
-		_, err = apigateway.NewIntegration(ctx, "LambdaIntegration", &apigateway.IntegrationArgs{
+		_, err = apigateway.NewIntegration(ctx, projectStackName+"-lambda-integration", &apigateway.IntegrationArgs{
 			HttpMethod:            pulumi.String("ANY"),
 			IntegrationHttpMethod: pulumi.String("POST"),
 			ResourceId:            apiresource.ID(),
@@ -146,7 +145,7 @@ func main() {
 
 		// Add a resource based policy to the Lambda function.
 		// This is the final step and allows AWS API Gateway to communicate with the AWS Lambda function
-		permission, err := lambda.NewPermission(ctx, "APIPermission", &lambda.PermissionArgs{
+		permission, err := lambda.NewPermission(ctx, projectStackName+"-api-permission", &lambda.PermissionArgs{
 			Action:    pulumi.String("lambda:InvokeFunction"),
 			Function:  function.Name,
 			Principal: pulumi.String("apigateway.amazonaws.com"),
@@ -157,15 +156,20 @@ func main() {
 		}
 
 		// Create a new deployment
-		_, err = apigateway.NewDeployment(ctx, "APIDeployment", &apigateway.DeploymentArgs{
-			Description:      pulumi.String("UpperCase API deployment"),
-			RestApi:          gateway.ID(),
-			StageDescription: pulumi.String(ctx.Stack()),
-			StageName:        pulumi.String(ctx.Stack()),
+		deployment, err := apigateway.NewDeployment(ctx, projectStackName+"-deployment", &apigateway.DeploymentArgs{
+			Description: pulumi.String("UpperCase API deployment"),
+			RestApi:     gateway.ID(),
 		}, pulumi.DependsOn([]pulumi.Resource{apiresource, function, permission}))
 		if err != nil {
 			return err
 		}
+
+		// Create a new stage
+		_, err = apigateway.NewStage(ctx, projectStackName+"-stage", &apigateway.StageArgs{
+			RestApi:    gateway.ID(),
+			StageName:  pulumi.String(ctx.Stack()),
+			Deployment: deployment.ID(),
+		})
 
 		ctx.Export("Lambda Name", function.Name)
 		ctx.Export("invocation URL", pulumi.Sprintf("https://%s.execute-api.%s.amazonaws.com/%s/{message}", gateway.ID(), region.Name, ctx.Stack()))
