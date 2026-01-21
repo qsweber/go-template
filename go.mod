@@ -1,8 +1,8 @@
 module github.com/pulumi/examples/aws-go-lambda-gateway
 
-go 1.23.0
+go 1.26
 
-toolchain go1.24.1
+toolchain go1.26
 
 require (
 	github.com/aws/aws-lambda-go v1.47.0
