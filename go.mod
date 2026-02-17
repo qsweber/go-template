@@ -1,4 +1,4 @@
-module github.com/pulumi/examples/aws-go-lambda-gateway
+module github.com/qsweber/go-template
 
 go 1.23.0
 
