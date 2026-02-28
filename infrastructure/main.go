@@ -6,6 +6,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/lambda"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
 const RolePolicy = `{
@@ -56,6 +57,12 @@ const GatewayPolicy = `{
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
+		// Load Cognito configuration (optional)
+		cfg := config.New(ctx, ctx.Project())
+		cognitoRegion := cfg.Get("cognitoRegion")
+		cognitoUserPoolId := cfg.Get("cognitoUserPoolId")
+		cognitoClientId := cfg.Get("cognitoClientId")
+
 		account, err := aws.GetCallerIdentity(ctx, &aws.GetCallerIdentityArgs{}, nil)
 		if err != nil {
 			return err
@@ -81,16 +88,30 @@ func main() {
 			Role:   role.Name,
 			Policy: pulumi.String(LogPolicy),
 		})
+		if err != nil {
+			return err
+		}
+
+		// Build environment variables for Lambda
+		environment := &lambda.FunctionEnvironmentArgs{}
+		if cognitoRegion != "" && cognitoUserPoolId != "" && cognitoClientId != "" {
+			environment.Variables = pulumi.StringMap{
+				"COGNITO_REGION":       pulumi.String(cognitoRegion),
+				"COGNITO_USER_POOL_ID": pulumi.String(cognitoUserPoolId),
+				"COGNITO_CLIENT_ID":    pulumi.String(cognitoClientId),
+			}
+		}
 
 		// Create the lambda using the args.
 		function, err := lambda.NewFunction(
 			ctx,
 			projectStackName+"-function",
 			&lambda.FunctionArgs{
-				Handler: pulumi.String("bootstrap"),
-				Role:    role.Arn,
-				Runtime: pulumi.String("provided.al2"),
-				Code:    pulumi.NewFileArchive("../handler.zip"),
+				Handler:     pulumi.String("bootstrap"),
+				Role:        role.Arn,
+				Runtime:     pulumi.String("provided.al2"),
+				Code:        pulumi.NewFileArchive("../handler.zip"),
+				Environment: environment,
 			},
 			pulumi.DependsOn([]pulumi.Resource{logPolicy}),
 		)
@@ -102,13 +123,14 @@ func main() {
 		gateway, err := apigateway.NewRestApi(ctx, projectStackName+"-api", &apigateway.RestApiArgs{
 			Name:        pulumi.String(projectStackName + "-api"),
 			Description: pulumi.String("An API Gateway for the " + projectStackName + " function"),
-			Policy:      pulumi.String(GatewayPolicy)})
+			Policy:      pulumi.String(GatewayPolicy),
+		})
 		if err != nil {
 			return err
 		}
 
 		// Add a resource to the API Gateway.
-		// This makes the API Gateway accept requests on "/{message}".
+		// This makes the API Gateway accept requests on "/{proxy+}".
 		apiresource, err := apigateway.NewResource(ctx, projectStackName+"-gateway-resource", &apigateway.ResourceArgs{
 			RestApi:  gateway.ID(),
 			PathPart: pulumi.String("{proxy+}"),
@@ -157,7 +179,7 @@ func main() {
 
 		// Create a new deployment
 		deployment, err := apigateway.NewDeployment(ctx, projectStackName+"-deployment", &apigateway.DeploymentArgs{
-			Description: pulumi.String("UpperCase API deployment"),
+			Description: pulumi.String("API deployment"),
 			RestApi:     gateway.ID(),
 		}, pulumi.DependsOn([]pulumi.Resource{apiresource, function, permission}))
 		if err != nil {
@@ -170,6 +192,9 @@ func main() {
 			StageName:  pulumi.String(ctx.Stack()),
 			Deployment: deployment.ID(),
 		})
+		if err != nil {
+			return err
+		}
 
 		ctx.Export("Lambda Name", function.Name)
 		ctx.Export("invocation URL", pulumi.Sprintf("https://%s.execute-api.%s.amazonaws.com/%s/{message}", gateway.ID(), region.Name, ctx.Stack()))
