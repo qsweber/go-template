@@ -1,3 +1,6 @@
 encryptionsalt: v1:aIKDKVeMFFk=:v1:ACjtrlp0QBw6TZ03:RQ5fD5Kng5toZwbfM7XFYYinCCrm0Q==
 config:
   aws:region: us-west-2
+  cognitoRegion: us-west-2
+  cognitoUserPoolId: us-west-2_dsZPgNnlO
+  cognitoClientId: 6b7f3hb8b4r45a2k2qkbcdjmtm
