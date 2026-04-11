@@ -1,118 +1,109 @@
-[![Deploy this example with Pulumi](https://www.pulumi.com/images/deploy-with-pulumi/dark.svg)](https://app.pulumi.com/new?template=https://github.com/pulumi/examples/blob/master/aws-go-lambda-gateway/README.md#gh-light-mode-only)
-[![Deploy this example with Pulumi](https://get.pulumi.com/new/button-light.svg)](https://app.pulumi.com/new?template=https://github.com/pulumi/examples/blob/master/aws-go-lambda-gateway/README.md#gh-dark-mode-only)
+# Go Template
 
-# AWS Golang Lambda With API Gateway
+This repository contains:
 
-This example creates a lambda that does a simple `ToUpper` on the path input of an API request and returns it.
+- A local HTTP API entrypoint at cmd/api/main.go
+- An AWS Lambda entrypoint at cmd/lambda/main.go
+- Shared business logic in internal/server
+- Shared request routing in internal/rpc
+- Pulumi infrastructure code in infrastructure
 
-## Deploying the App
+## Prerequisites
 
-To deploy your infrastructure, follow the below steps.
+1. Go 1.24+
+2. (Optional, for deployment) Pulumi CLI and AWS credentials
 
-### Prerequisites
+## Run The API Locally
 
-1. [Install Pulumi](https://www.pulumi.com/docs/get-started/install/)
-2. [Configure AWS Credentials](https://www.pulumi.com/docs/intro/cloud-providers/aws/setup/)
-3. [Clone aws-go-lambda](https://github.com/aws/aws-lambda-go)
+Start the local API server from the repository root:
 
-### Steps
+```bash
+go run ./cmd/api/main.go
+```
 
-After cloning this repo, run these commands from the working directory:
+The server listens on port 8080.
 
-1. Build the handler:
+### Endpoints
 
-	- For developers on Linux and macOS:
+1. Health check:
 
-		```bash
-		make build
-		```
+```bash
+curl -i http://localhost:8080/ping
+```
 
-	- For developers on Windows:
+2. Protected foo route without auth (expected 401):
 
-		- Get the `build-lambda-zip` tool:
+```bash
+curl -i http://localhost:8080/foo
+```
 
-			```bash
-			set GO111MODULE=on
-			go.exe get -u github.com/aws/aws-lambda-go/cmd/build-lambda-zip
-			```
+3. Protected foo route with mock auth (expected 200):
 
-		- Use the tool from your GOPATH:
+```bash
+curl -i -H "Authorization: Bearer dev-token" http://localhost:8080/foo
+```
 
-			```bash
-			set GOOS=linux
-			set GOARCH=amd64
-			set CGO_ENABLED=0
-			go build -o handler\bootstrap handler\handler.go
-			%USERPROFILE%\Go\bin\build-lambda-zip.exe -o handler\handler.zip handler\bootstrap
-			```
+Expected body for successful foo request:
 
+```json
+{"baz": "example"}
+```
 
-2. Create a new Pulumi stack, which is an isolated deployment target for this example:
+## Local Auth Behavior
 
-	```bash
-	pulumi stack init
-	```
+For local development, cmd/api/main.go uses a mock token verifier.
 
-3. Set the required configuration variables for this program:
-	```bash
-	$ pulumi config set aws:region us-west-2
-	```
+- Any request to /foo must still include an Authorization header in Bearer format.
+- The token value is not validated against Cognito in local mode.
 
-4. Execute the Pulumi program to create our lambda:
+This keeps local development simple while preserving authenticated request flow.
 
-	```bash
-	$ pulumi up
-	Previewing update (dev):
-		Type                           Name               Plan
-	+   pulumi:pulumi:Stack            go-lambda-dev      create
-	+   ├─ aws:apigateway:RestApi      UpperCaseGateway   create
-	+   ├─ aws:iam:Role                task-exec-role     create
-	+   ├─ aws:apigateway:Resource     UpperAPI           create
-	+   ├─ aws:iam:RolePolicy          lambda-log-policy  create
-	+   ├─ aws:apigateway:Method       AnyMethod          create
-	+   ├─ aws:lambda:Function         basicLambda        create
-	+   ├─ aws:lambda:Permission       APIPermission      create
-	+   ├─ aws:apigateway:Integration  LambdaIntegration  create
-	+   └─ aws:apigateway:Deployment   APIDeployment      create
+## Lambda Auth Behavior
 
-	Resources:
-		+ 10 to create
+The Lambda entrypoint uses Cognito verification when these environment variables are set:
 
-	Do you want to perform this update? yes
-	Updating (dev):
-		Type                           Name               Status
-	+   pulumi:pulumi:Stack            go-lambda-dev      created
-	+   ├─ aws:apigateway:RestApi      UpperCaseGateway   created
-	+   ├─ aws:iam:Role                task-exec-role     created
-	+   ├─ aws:apigateway:Resource     UpperAPI           created
-	+   ├─ aws:iam:RolePolicy          lambda-log-policy  created
-	+   ├─ aws:apigateway:Method       AnyMethod          created
-	+   ├─ aws:lambda:Function         basicLambda        created
-	+   ├─ aws:apigateway:Integration  LambdaIntegration  created
-	+   ├─ aws:lambda:Permission       APIPermission      created
-	+   └─ aws:apigateway:Deployment   APIDeployment      created
+- COGNITO_REGION
+- COGNITO_USER_POOL_ID
+- COGNITO_CLIENT_ID
 
-	Outputs:
-		invocation URL: "https://<gateway-id>.execute-api.us-west-2.amazonaws.com/prod/{message}"
+If configuration is missing, auth verification is disabled in Lambda initialization.
 
-	Resources:
-		+ 10 created
+## Build Lambda Artifact
 
-	Duration: 29s
-	```
+Use the included make target:
 
-5. Call our lambda function from the cli:
+```bash
+make build-lambda
+```
 
-	```bash
-	curl https://<gateway-id>.execute-api.us-west-2.amazonaws.com/prod/helloworld
-	HELLOWORLD%
-	```
+This produces:
 
-6. From there, feel free to experiment. Simply making edits, rebuilding your handler, and running `pulumi up` will update your lambda.
+- bootstrap
+- handler.zip
 
-7. Afterwards, destroy your stack and remove it:
+## Deploy With Pulumi
 
-	```bash
-	pulumi destroy --yes
-	pulumi stack rm --yes
-	```
+1. Initialize/select a stack:
+
+```bash
+pulumi stack init dev
+```
+
+2. Set AWS region:
+
+```bash
+pulumi config set aws:region us-west-2
+```
+
+3. Deploy:
+
+```bash
+pulumi up
+```
+
+4. Tear down when done:
+
+```bash
+pulumi destroy --yes
+pulumi stack rm --yes
+```
