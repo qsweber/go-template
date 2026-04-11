@@ -1,13 +1,12 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
 	"log"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/qsweber/go-template/internal/auth"
+	"github.com/qsweber/go-template/internal/rpc"
 	"github.com/qsweber/go-template/internal/server"
 )
 
@@ -27,8 +26,6 @@ func init() {
 }
 
 func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	srv := server.New()
-
 	// Handle CORS preflight requests
 	if request.HTTPMethod == "OPTIONS" {
 		return events.APIGatewayProxyResponse{
@@ -41,75 +38,24 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		}, nil
 	}
 
-	switch request.Path {
-	case "/ping":
-		result := srv.Ping()
-		responseBytes, err := json.Marshal(map[string]bool{"ok": result})
-		if err != nil {
-			return events.APIGatewayProxyResponse{StatusCode: 500, Body: "Error encoding response"}, err
-		}
-		return events.APIGatewayProxyResponse{
-			StatusCode: 200,
-			Body:       string(responseBytes),
-			Headers: map[string]string{
-				"Content-Type":                "application/json",
-				"Access-Control-Allow-Origin": "*",
-			},
-		}, nil
-	case "/foo":
-		// Verify authentication for /foo endpoint
-		if cognitoVerifier != nil {
-			authHeader := request.Headers["Authorization"]
-			if authHeader == "" {
-				authHeader = request.Headers["authorization"] // try lowercase
-			}
-
-			token, err := auth.ExtractBearerToken(authHeader)
-			if err != nil {
-				return events.APIGatewayProxyResponse{
-					StatusCode: 401,
-					Body:       `{"error": "Unauthorized: ` + err.Error() + `"}`,
-					Headers: map[string]string{
-						"Content-Type": "application/json",
-					},
-				}, nil
-			}
-
-			claims, err := cognitoVerifier.VerifyToken(context.Background(), token)
-			if err != nil {
-				return events.APIGatewayProxyResponse{
-					StatusCode: 401,
-					Body:       `{"error": "Unauthorized: Invalid or expired token"}`,
-					Headers: map[string]string{
-						"Content-Type": "application/json",
-					},
-				}, nil
-			}
-
-			log.Printf("Authenticated user: %s (email: %s)", claims.Subject, claims.Email)
-		}
-
-		bar := request.QueryStringParameters["bar"] // /foo?bar=hello
-		input := server.FooInput{Bar: bar}
-		output, err := srv.Foo(input)
-		if err != nil {
-			return events.APIGatewayProxyResponse{StatusCode: 500, Body: "Error calling Foo"}, err
-		}
-		responseBytes, err := json.Marshal(output)
-		if err != nil {
-			return events.APIGatewayProxyResponse{StatusCode: 500, Body: "Error encoding response"}, err
-		}
-		return events.APIGatewayProxyResponse{
-			StatusCode: 200,
-			Body:       string(responseBytes),
-			Headers: map[string]string{
-				"Content-Type":                "application/json",
-				"Access-Control-Allow-Origin": "*",
-			},
-		}, nil
-	default:
-		return events.APIGatewayProxyResponse{StatusCode: 404, Body: "Not Found"}, nil
+	req := rpc.Request{
+		Path:    request.Path,
+		Headers: make(map[string]any),
 	}
+	for k, v := range request.Headers {
+		req.Headers[k] = v
+	}
+
+	srv := server.New()
+
+	resp := rpc.Handler(req, srv, cognitoVerifier)
+
+	return events.APIGatewayProxyResponse{
+		StatusCode: resp.StatusCode,
+		Body:       resp.Body,
+		// Headers
+	}, nil
+
 }
 
 func main() {

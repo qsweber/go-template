@@ -1,7 +1,7 @@
 package server
 
 type Server interface {
-	Ping() bool
+	Ping() (PingOutput, error)
 	Foo(input FooInput) (FooOutput, error)
 }
 
