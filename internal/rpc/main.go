@@ -16,6 +16,7 @@ type Request struct {
 type Response struct {
 	StatusCode int
 	Body       string
+	Headers    map[string]string
 }
 
 type TokenVerifier interface {
@@ -41,29 +42,35 @@ func authenticateRequest(req Request, tokenVerifier TokenVerifier) (*auth.Claims
 	return claims, nil
 }
 
+func corsHeaders() map[string]string {
+	return map[string]string{
+		"Access-Control-Allow-Origin": "*",
+	}
+}
+
 func Handler(req Request, srv server.Server, tokenVerifier TokenVerifier) Response {
 	switch req.Path {
 	case "/ping":
 		result, err := srv.Ping()
 		if err != nil {
-			return Response{StatusCode: 500}
+			return Response{StatusCode: 500, Headers: corsHeaders()}
 		}
 		if result.Ok {
-			return Response{StatusCode: 200, Body: `{"ok": true}`}
+			return Response{StatusCode: 200, Body: `{"ok": true}`, Headers: corsHeaders()}
 		}
-		return Response{StatusCode: 500}
+		return Response{StatusCode: 500, Headers: corsHeaders()}
 	case "/foo":
 		_, err := authenticateRequest(req, tokenVerifier)
 		if err != nil {
-			return Response{StatusCode: 401}
+			return Response{StatusCode: 401, Headers: corsHeaders()}
 		}
 		output, err := srv.Foo(server.FooInput{Bar: "example"})
 		if err != nil {
-			return Response{StatusCode: 500}
+			return Response{StatusCode: 500, Headers: corsHeaders()}
 		}
-		return Response{StatusCode: 200, Body: output.String()}
+		return Response{StatusCode: 200, Body: output.String(), Headers: corsHeaders()}
 
 	default:
-		return Response{StatusCode: 404}
+		return Response{StatusCode: 404, Headers: corsHeaders()}
 	}
 }

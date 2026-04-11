@@ -53,7 +53,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	return events.APIGatewayProxyResponse{
 		StatusCode: resp.StatusCode,
 		Body:       resp.Body,
-		// Headers
+		Headers:    resp.Headers,
 	}, nil
 
 }
