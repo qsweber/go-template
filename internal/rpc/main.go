@@ -30,7 +30,10 @@ func authenticateRequest(req Request, tokenVerifier TokenVerifier) (*auth.Claims
 	}
 	authHeader, ok := req.Headers["Authorization"].(string)
 	if !ok {
-		return nil, errors.New("Authorization header is missing")
+		authHeader, ok = req.Headers["authorization"].(string)
+		if !ok {
+			return nil, errors.New("Authorization header is missing")
+		}
 	}
 	token, err := auth.ExtractBearerToken(authHeader)
 	if err != nil {
