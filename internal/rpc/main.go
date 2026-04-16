@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/qsweber/go-template/internal/auth"
@@ -68,7 +69,11 @@ func Handler(req Request, srv server.Server, tokenVerifier TokenVerifier) Respon
 		if err != nil {
 			return Response{StatusCode: 500, Headers: corsHeaders()}
 		}
-		return Response{StatusCode: 200, Body: output.String(), Headers: corsHeaders()}
+		body, err := json.Marshal(output)
+		if err != nil {
+			return Response{StatusCode: 500, Headers: corsHeaders()}
+		}
+		return Response{StatusCode: 200, Body: string(body), Headers: corsHeaders()}
 
 	default:
 		return Response{StatusCode: 404, Headers: corsHeaders()}

@@ -8,11 +8,6 @@ type FooOutput struct {
 	Baz string `json:"baz"`
 }
 
-func (o FooOutput) String() string {
-	// json
-	return `{"baz": "` + o.Baz + `"}`
-}
-
 func (s *ServerImpl) Foo(input FooInput) (FooOutput, error) {
 	return FooOutput{Baz: input.Bar}, nil
 }
