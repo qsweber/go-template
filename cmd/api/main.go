@@ -20,13 +20,14 @@ func main() {
 	tokenVerifier := mockVerifier{}
 
 	genericHandler := func(w http.ResponseWriter, r *http.Request) {
-		headers := make(map[string]any)
+		headers := make(map[string]string)
 		for k, v := range r.Header {
 			if len(v) > 0 {
 				headers[k] = v[0]
 			}
 		}
 		result := rpc.Handler(
+			r.Context(),
 			rpc.Request{
 				Path:    r.URL.Path,
 				Headers: headers,
@@ -34,9 +35,11 @@ func main() {
 			srv,
 			tokenVerifier,
 		)
-		w.WriteHeader(result.StatusCode)
-		w.Write([]byte(result.Body))
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(result.StatusCode)
+		if _, err := w.Write([]byte(result.Body)); err != nil {
+			return
+		}
 	}
 
 	http.HandleFunc("/ping", genericHandler)

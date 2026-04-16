@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -25,7 +26,7 @@ func init() {
 	}
 }
 
-func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	// Handle CORS preflight requests
 	if request.HTTPMethod == "OPTIONS" {
 		return events.APIGatewayProxyResponse{
@@ -40,15 +41,12 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	req := rpc.Request{
 		Path:    request.Path,
-		Headers: make(map[string]any),
-	}
-	for k, v := range request.Headers {
-		req.Headers[k] = v
+		Headers: request.Headers,
 	}
 
 	srv := server.New()
 
-	resp := rpc.Handler(req, srv, cognitoVerifier)
+	resp := rpc.Handler(ctx, req, srv, cognitoVerifier)
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: resp.StatusCode,

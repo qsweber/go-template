@@ -11,7 +11,7 @@ import (
 
 type Request struct {
 	Path    string
-	Headers map[string]any
+	Headers map[string]string
 }
 
 type Response struct {
@@ -24,24 +24,24 @@ type TokenVerifier interface {
 	VerifyToken(ctx context.Context, tokenString string) (*auth.Claims, error)
 }
 
-func authenticateRequest(req Request, tokenVerifier TokenVerifier) (*auth.Claims, error) {
+func authenticateRequest(ctx context.Context, req Request, tokenVerifier TokenVerifier) (*auth.Claims, error) {
 	if tokenVerifier == nil {
-		return nil, errors.New("Authentication is not configured")
+		return nil, errors.New("authentication is not configured")
 	}
-	authHeader, ok := req.Headers["Authorization"].(string)
+	authHeader, ok := req.Headers["Authorization"]
 	if !ok {
-		authHeader, ok = req.Headers["authorization"].(string)
+		authHeader, ok = req.Headers["authorization"]
 		if !ok {
-			return nil, errors.New("Authorization header is missing")
+			return nil, errors.New("authorization header is missing")
 		}
 	}
 	token, err := auth.ExtractBearerToken(authHeader)
 	if err != nil {
-		return nil, errors.New("Failed to extract bearer token")
+		return nil, errors.New("failed to extract bearer token")
 	}
-	claims, err := tokenVerifier.VerifyToken(context.Background(), token)
+	claims, err := tokenVerifier.VerifyToken(ctx, token)
 	if err != nil {
-		return nil, errors.New("Failed to verify token")
+		return nil, errors.New("failed to verify token")
 	}
 	return claims, nil
 }
@@ -52,7 +52,7 @@ func corsHeaders() map[string]string {
 	}
 }
 
-func Handler(req Request, srv server.Server, tokenVerifier TokenVerifier) Response {
+func Handler(ctx context.Context, req Request, srv server.Server, tokenVerifier TokenVerifier) Response {
 	switch req.Path {
 	case "/ping":
 		result, err := srv.Ping()
@@ -64,7 +64,7 @@ func Handler(req Request, srv server.Server, tokenVerifier TokenVerifier) Respon
 		}
 		return Response{StatusCode: 500, Headers: corsHeaders()}
 	case "/foo":
-		_, err := authenticateRequest(req, tokenVerifier)
+		_, err := authenticateRequest(ctx, req, tokenVerifier)
 		if err != nil {
 			return Response{StatusCode: 401, Headers: corsHeaders()}
 		}
