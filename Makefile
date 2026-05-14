@@ -3,5 +3,6 @@ build-apigateway-lambda::
 	zip -j ./handler.zip ./bootstrap
 
 build-dynamostream-lambda::
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./bootstrap-stream ./cmd/dynamostream/main.go
-	zip -j ./stream.zip ./bootstrap-stream
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./bootstrap ./cmd/dynamostream/main.go
+	rm -f ./stream.zip
+	zip -j ./stream.zip ./bootstrap

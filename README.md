@@ -90,7 +90,7 @@ make build-dynamostream-lambda
 
 This produces:
 
-- bootstrap-stream
+- bootstrap
 - stream.zip
 
 ## Deploy With Pulumi
