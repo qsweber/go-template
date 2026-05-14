@@ -3,15 +3,20 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/qsweber/go-template/internal/auth"
+	"github.com/qsweber/go-template/internal/clicks"
 	"github.com/qsweber/go-template/internal/rpc"
 	"github.com/qsweber/go-template/internal/server"
 )
 
 var cognitoVerifier *auth.CognitoVerifier
+var clicksRepository clicks.Repository
 
 func init() {
 	// Initialize Cognito verifier at startup
@@ -24,6 +29,22 @@ func init() {
 		cognitoVerifier = auth.NewCognitoVerifier(config)
 		log.Printf("Cognito authentication enabled for region: %s", config.Region)
 	}
+
+	// Initialize DynamoDB client
+	ctx := context.Background()
+	cfg, err := awsconfig.LoadDefaultConfig(ctx)
+	if err != nil {
+		log.Fatalf("Failed to load AWS config: %v", err)
+	}
+	dynamoDBClient := dynamodb.NewFromConfig(cfg)
+
+	// Create clicks repository
+	clicksTableName := os.Getenv("CLICKS_TABLE")
+	if clicksTableName == "" {
+		log.Fatalf("CLICKS_TABLE environment variable is not set")
+	}
+	clicksRepository = clicks.New(clicksTableName, dynamoDBClient)
+	log.Printf("Initialized DynamoDB clicks table: %s", clicksTableName)
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
@@ -44,7 +65,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		Headers: request.Headers,
 	}
 
-	srv := server.New()
+	srv := server.New(clicksRepository)
 
 	resp := rpc.Handler(ctx, req, srv, cognitoVerifier)
 

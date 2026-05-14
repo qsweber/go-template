@@ -92,14 +92,23 @@ func main() {
 			return err
 		}
 
+		// Create DynamoDB resources
+		dynamoResources, err := createDynamoDBResources(ctx, projectStackName, role)
+		if err != nil {
+			return err
+		}
+
 		// Build environment variables for Lambda
-		environment := &lambda.FunctionEnvironmentArgs{}
+		envVars := pulumi.StringMap{
+			"CLICKS_TABLE": dynamoResources.ClicksTable.Name,
+		}
 		if cognitoRegion != "" && cognitoUserPoolId != "" && cognitoClientId != "" {
-			environment.Variables = pulumi.StringMap{
-				"COGNITO_REGION":       pulumi.String(cognitoRegion),
-				"COGNITO_USER_POOL_ID": pulumi.String(cognitoUserPoolId),
-				"COGNITO_CLIENT_ID":    pulumi.String(cognitoClientId),
-			}
+			envVars["COGNITO_REGION"] = pulumi.String(cognitoRegion)
+			envVars["COGNITO_USER_POOL_ID"] = pulumi.String(cognitoUserPoolId)
+			envVars["COGNITO_CLIENT_ID"] = pulumi.String(cognitoClientId)
+		}
+		environment := &lambda.FunctionEnvironmentArgs{
+			Variables: envVars,
 		}
 
 		// Create the lambda using the args.
@@ -113,7 +122,7 @@ func main() {
 				Code:        pulumi.NewFileArchive("../handler.zip"),
 				Environment: environment,
 			},
-			pulumi.DependsOn([]pulumi.Resource{logPolicy}),
+			pulumi.DependsOn([]pulumi.Resource{logPolicy, dynamoResources.Policy}),
 		)
 		if err != nil {
 			return err

@@ -1,12 +1,22 @@
 package server
 
+import (
+	"context"
+
+	"github.com/qsweber/go-template/internal/clicks"
+)
+
 type Server interface {
 	Ping() (PingOutput, error)
-	Foo(input FooInput) (FooOutput, error)
+	Foo(ctx context.Context, cognitoUserID string, input FooInput) (FooOutput, error)
 }
 
-type ServerImpl struct{}
+type ServerImpl struct {
+	clicksRepository clicks.Repository
+}
 
-func New() Server {
-	return &ServerImpl{}
+func New(clicksRepository clicks.Repository) Server {
+	return &ServerImpl{
+		clicksRepository: clicksRepository,
+	}
 }

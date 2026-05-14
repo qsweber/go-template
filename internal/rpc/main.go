@@ -64,11 +64,11 @@ func Handler(ctx context.Context, req Request, srv server.Server, tokenVerifier 
 		}
 		return Response{StatusCode: 500, Headers: corsHeaders()}
 	case "/foo":
-		_, err := authenticateRequest(ctx, req, tokenVerifier)
+		claims, err := authenticateRequest(ctx, req, tokenVerifier)
 		if err != nil {
 			return Response{StatusCode: 401, Headers: corsHeaders()}
 		}
-		output, err := srv.Foo(server.FooInput{Bar: "example"})
+		output, err := srv.Foo(ctx, claims.CognitoUser, server.FooInput{Bar: "example"})
 		if err != nil {
 			return Response{StatusCode: 500, Headers: corsHeaders()}
 		}
