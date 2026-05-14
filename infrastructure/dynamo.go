@@ -34,10 +34,12 @@ func createDynamoDBResources(ctx *pulumi.Context, projectStackName string, role 
 
 	// Create the DynamoDB clicks table
 	clicksTable, err := dynamodb.NewTable(ctx, projectStackName+"-dynamodb-clicks-table", &dynamodb.TableArgs{
-		Name:        pulumi.String(projectStackName + "-clicks"),
-		BillingMode: pulumi.String("PAY_PER_REQUEST"),
-		HashKey:     pulumi.String("cognito_user_id"),
-		RangeKey:    pulumi.String("occurred_at"),
+		Name:           pulumi.String(projectStackName + "-clicks"),
+		BillingMode:    pulumi.String("PAY_PER_REQUEST"),
+		HashKey:        pulumi.String("cognito_user_id"),
+		RangeKey:       pulumi.String("occurred_at"),
+		StreamEnabled:  pulumi.Bool(true),
+		StreamViewType: pulumi.String("NEW_IMAGE"),
 		Attributes: dynamodb.TableAttributeArray{
 			&dynamodb.TableAttributeArgs{
 				Name: pulumi.String("cognito_user_id"),

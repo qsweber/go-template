@@ -3,7 +3,8 @@
 This repository contains:
 
 - A local HTTP API entrypoint at cmd/api/main.go
-- An AWS Lambda entrypoint at cmd/lambda/main.go
+- An AWS Lambda entrypoint at cmd/apigateway/main.go
+- An AWS Lambda stream consumer at cmd/dynamostream/main.go
 - Shared business logic in internal/server
 - Shared request routing in internal/rpc
 - Pulumi infrastructure code in infrastructure
@@ -73,13 +74,24 @@ If configuration is missing, auth verification is disabled in Lambda initializat
 Use the included make target:
 
 ```bash
-make build-lambda
+make build-apigateway-lambda
 ```
 
 This produces:
 
 - bootstrap
 - handler.zip
+
+For the DynamoDB stream consumer, use:
+
+```bash
+make build-dynamostream-lambda
+```
+
+This produces:
+
+- bootstrap-stream
+- stream.zip
 
 ## Deploy With Pulumi
 
