@@ -1,20 +1,29 @@
 package server
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
-type FooInput struct {
-	Bar string
-}
-
-type FooOutput struct {
+type fooOutput struct {
 	Baz string `json:"baz"`
 }
 
-func (s *ServerImpl) Foo(ctx context.Context, cognitoUserID string, input FooInput) (FooOutput, error) {
-	// Record the click
-	if err := s.clicksRepository.RecordClick(ctx, cognitoUserID); err != nil {
-		return FooOutput{}, err
+func (s *ServerImpl) Foo(ctx context.Context, req Request) Response {
+	claims, err := s.authenticateRequest(ctx, req)
+	if err != nil {
+		return errorResponse(401, err)
 	}
 
-	return FooOutput{Baz: input.Bar}, nil
+	// Record the click for the authenticated user.
+	if err := s.serviceContext.Repositories.Clicks.RecordClick(ctx, claims.CognitoUser); err != nil {
+		return errorResponse(500, err)
+	}
+
+	body, err := json.Marshal(fooOutput{Baz: "example"})
+	if err != nil {
+		return errorResponse(500, err)
+	}
+
+	return Response{StatusCode: 200, Body: string(body), Headers: corsHeaders()}
 }

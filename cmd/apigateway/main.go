@@ -10,13 +10,11 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/qsweber/go-template/internal/auth"
-	"github.com/qsweber/go-template/internal/clicks"
-	"github.com/qsweber/go-template/internal/rpc"
+	"github.com/qsweber/go-template/internal/repositories"
 	"github.com/qsweber/go-template/internal/server"
 )
 
-var cognitoVerifier *auth.CognitoVerifier
-var clicksRepository clicks.Repository
+var serviceCtx server.ServiceContext
 
 func init() {
 	// Initialize Cognito verifier at startup
@@ -24,9 +22,9 @@ func init() {
 	if err != nil {
 		log.Printf("Warning: Failed to load Cognito config: %v", err)
 		log.Printf("Authentication will be disabled. Set COGNITO_REGION, COGNITO_USER_POOL_ID, and COGNITO_CLIENT_ID to enable.")
-		cognitoVerifier = nil
+		serviceCtx.CognitoVerifier = nil
 	} else {
-		cognitoVerifier = auth.NewCognitoVerifier(config)
+		serviceCtx.CognitoVerifier = auth.NewCognitoVerifier(config)
 		log.Printf("Cognito authentication enabled for region: %s", config.Region)
 	}
 
@@ -43,31 +41,19 @@ func init() {
 	if clicksTableName == "" {
 		log.Fatalf("CLICKS_TABLE environment variable is not set")
 	}
-	clicksRepository = clicks.New(clicksTableName, dynamoDBClient)
+	serviceCtx.Repositories.Clicks = repositories.NewClicksRepository(clicksTableName, dynamoDBClient)
 	log.Printf("Initialized DynamoDB clicks table: %s", clicksTableName)
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	// Handle CORS preflight requests
-	if request.HTTPMethod == "OPTIONS" {
-		return events.APIGatewayProxyResponse{
-			StatusCode: 200,
-			Headers: map[string]string{
-				"Access-Control-Allow-Origin":  "*",
-				"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-				"Access-Control-Allow-Headers": "Content-Type, Authorization",
-			},
-		}, nil
-	}
-
-	req := rpc.Request{
+	srv := server.New(serviceCtx)
+	req := server.Request{
+		Method:  request.HTTPMethod,
 		Path:    request.Path,
 		Headers: request.Headers,
 	}
 
-	srv := server.New(clicksRepository)
-
-	resp := rpc.Handler(ctx, req, srv, cognitoVerifier)
+	resp := srv.Handle(ctx, req)
 
 	return events.APIGatewayProxyResponse{
 		StatusCode: resp.StatusCode,

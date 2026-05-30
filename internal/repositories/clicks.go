@@ -1,4 +1,4 @@
-package clicks
+package repositories
 
 import (
 	"context"
@@ -14,23 +14,28 @@ type Click struct {
 	OccurredAt    int64  `dynamodbav:"occurred_at"`
 }
 
-type Repository interface {
+type ClicksRepository interface {
+	GetTableName() string
 	RecordClick(ctx context.Context, cognitoUserID string) error
 }
 
-type RepositoryImpl struct {
+type ClicksRepositoryImpl struct {
 	tableName string
 	client    *dynamodb.Client
 }
 
-func New(tableName string, client *dynamodb.Client) Repository {
-	return &RepositoryImpl{
+func NewClicksRepository(tableName string, client *dynamodb.Client) ClicksRepository {
+	return &ClicksRepositoryImpl{
 		tableName: tableName,
 		client:    client,
 	}
 }
 
-func (r *RepositoryImpl) RecordClick(ctx context.Context, cognitoUserID string) error {
+func (r *ClicksRepositoryImpl) GetTableName() string {
+	return r.tableName
+}
+
+func (r *ClicksRepositoryImpl) RecordClick(ctx context.Context, cognitoUserID string) error {
 	click := Click{
 		CognitoUserID: cognitoUserID,
 		OccurredAt:    time.Now().UnixMilli(),
