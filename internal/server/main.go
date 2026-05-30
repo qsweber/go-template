@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/qsweber/go-template/internal/auth"
-	"github.com/qsweber/go-template/internal/repositories"
 )
 
 type Request struct {
@@ -20,11 +19,6 @@ type Response struct {
 	StatusCode int
 	Body       string
 	Headers    map[string]string
-}
-
-type ServiceContext struct {
-	Repositories    repositories.Repositories
-	CognitoVerifier *auth.CognitoVerifier
 }
 
 type Server interface {
