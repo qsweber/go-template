@@ -11,7 +11,7 @@ This repository contains:
 
 ## Prerequisites
 
-1. Go 1.24+
+1. Go 1.25.8+
 2. (Optional, for deployment) Pulumi CLI and AWS credentials
 
 ## Run The API Locally
