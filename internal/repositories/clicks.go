@@ -17,6 +17,7 @@ type Click struct {
 type ClicksRepository interface {
 	GetTableName() string
 	RecordClick(ctx context.Context, cognitoUserID string) error
+	GetClickCount(ctx context.Context) (int, error)
 }
 
 type ClicksRepositoryImpl struct {
@@ -33,6 +34,16 @@ func NewClicksRepository(tableName string, client *dynamodb.Client) ClicksReposi
 
 func (r *ClicksRepositoryImpl) GetTableName() string {
 	return r.tableName
+}
+
+func (r *ClicksRepositoryImpl) GetClickCount(ctx context.Context) (int, error) {
+	out, err := r.client.DescribeTable(ctx, &dynamodb.DescribeTableInput{
+		TableName: aws.String(r.tableName),
+	})
+	if err != nil {
+		return 0, err
+	}
+	return int(aws.ToInt64(out.Table.ItemCount)), nil
 }
 
 func (r *ClicksRepositoryImpl) RecordClick(ctx context.Context, cognitoUserID string) error {

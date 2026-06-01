@@ -24,7 +24,8 @@ type Response struct {
 type Server interface {
 	Handle(ctx context.Context, req Request) Response
 	Ping() Response
-	Foo(ctx context.Context, req Request) Response
+	RecordClick(ctx context.Context, req Request) Response
+	GetClickCount(ctx context.Context) Response
 }
 
 type ServerImpl struct {
@@ -45,8 +46,10 @@ func (s *ServerImpl) Handle(ctx context.Context, req Request) Response {
 	switch req.Path {
 	case "/ping":
 		return s.Ping()
-	case "/foo":
-		return s.Foo(ctx, req)
+	case "/record-click":
+		return s.RecordClick(ctx, req)
+	case "/click-count":
+		return s.GetClickCount(ctx)
 	default:
 		return errorResponse(404, errors.New("route not found"))
 	}
