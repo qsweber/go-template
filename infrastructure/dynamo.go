@@ -11,7 +11,8 @@ const DynamoDBPolicy = `{
 	"Statement": [{
 		"Effect": "Allow",
 		"Action": [
-			"dynamodb:PutItem"
+			"dynamodb:PutItem",
+			"dynamodb:DescribeTable"
 		],
 		"Resource": "arn:aws:dynamodb:*:*:table/*"
 	}]
