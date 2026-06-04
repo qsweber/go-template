@@ -1,9 +1,9 @@
 package server
 
-type PingOutput struct {
-	Ok bool `json:"ok"`
-}
-
-func (s *ServerImpl) Ping() (PingOutput, error) {
-	return PingOutput{Ok: true}, nil
+func (s *ServerImpl) Ping() Response {
+	return Response{
+		StatusCode: 200,
+		Body:       `{"ok": true}`,
+		Headers:    corsHeaders(),
+	}
 }
