@@ -1,6 +1,5 @@
 encryptionsalt: v1:zlYb4fWsQsM=:v1:1aWq+/j3fXMeu5bz:gZSrZRbKRS4YUc7pQrrheZqp1im/eQ==
 config:
   aws:region: us-west-2
-  cognitoRegion: us-west-2
-  cognitoUserPoolId: us-west-2_snqq05ZNY
-  cognitoClientId: gfpfndoce6rd0dqkeoseb768c
+  domainName: dev-template.quinnweber.com
+  zoneId: Z07290422T6PHN4TKVNW0
