@@ -41,16 +41,15 @@ func createAPIGatewayResources(
 	logPolicy *iam.RolePolicy,
 	dynamoResources *DynamoDBResources,
 	cognitoRegion string,
-	cognitoUserPoolId string,
-	cognitoClientId string,
+	cognitoResources *CognitoResources,
 ) (*APIGatewayResources, error) {
 	envVars := pulumi.StringMap{
 		"CLICKS_TABLE": dynamoResources.ClicksTable.Name,
 	}
-	if cognitoRegion != "" && cognitoUserPoolId != "" && cognitoClientId != "" {
+	if cognitoRegion != "" && cognitoResources != nil {
 		envVars["COGNITO_REGION"] = pulumi.String(cognitoRegion)
-		envVars["COGNITO_USER_POOL_ID"] = pulumi.String(cognitoUserPoolId)
-		envVars["COGNITO_CLIENT_ID"] = pulumi.String(cognitoClientId)
+		envVars["COGNITO_USER_POOL_ID"] = cognitoResources.UserPool.ID().ToStringOutput()
+		envVars["COGNITO_CLIENT_ID"] = cognitoResources.UserPoolClient.ID().ToStringOutput()
 	}
 	environment := &lambda.FunctionEnvironmentArgs{
 		Variables: envVars,

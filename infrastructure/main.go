@@ -36,9 +36,8 @@ func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		// Load Cognito configuration (optional)
 		cfg := config.New(ctx, ctx.Project())
-		cognitoRegion := cfg.Get("cognitoRegion")
-		cognitoUserPoolId := cfg.Get("cognitoUserPoolId")
-		cognitoClientId := cfg.Get("cognitoClientId")
+		domainName := cfg.Require("domainName")
+		zoneID := cfg.Require("zoneId")
 
 		region, err := aws.GetRegion(ctx, &aws.GetRegionArgs{})
 		if err != nil {
@@ -75,12 +74,26 @@ func main() {
 			return err
 		}
 
-		apigatewayResources, err := createAPIGatewayResources(ctx, projectStackName, role, logPolicy, dynamoResources, cognitoRegion, cognitoUserPoolId, cognitoClientId)
+		// Create SES resources (domain identity + verification records)
+		sesResources, err := createSESResources(ctx, projectStackName, domainName, zoneID)
+		if err != nil {
+			return err
+		}
+
+		// Create Cognito resources (user pool + client)
+		cognitoResources, err := createCognitoResources(ctx, projectStackName, domainName, sesResources.DomainIdentity.Arn)
+		if err != nil {
+			return err
+		}
+
+		apigatewayResources, err := createAPIGatewayResources(ctx, projectStackName, role, logPolicy, dynamoResources, region.Name, cognitoResources)
 		if err != nil {
 			return err
 		}
 
 		ctx.Export("Lambda Name", apigatewayResources.Function.Name)
+		ctx.Export("Cognito User Pool ID", cognitoResources.UserPool.ID())
+		ctx.Export("Cognito User Pool Client ID", cognitoResources.UserPoolClient.ID())
 		ctx.Export("invocation URL", pulumi.Sprintf("https://%s.execute-api.%s.amazonaws.com/%s/{message}", apigatewayResources.Gateway.ID(), region.Name, ctx.Stack()))
 
 		return nil
