@@ -29,7 +29,7 @@ The server listens on port 8080.
 1. Health check:
 
 ```bash
-curl -i http://localhost:8080/ping
+curl -i http://localhost:8080/v1/ping
 ```
 
 2. Protected foo route without auth (expected 401):

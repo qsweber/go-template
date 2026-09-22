@@ -23,6 +23,9 @@ type EnvConfig struct {
 	// The existing SES domain verification TXT record value (legacy verification path,
 	// kept alongside Easy DKIM for continuity). Read from live Route53 state.
 	SESVerificationToken string
+
+	// Custom domain for the API Gateway (e.g. "dev-template-api.quinnweber.com").
+	ApiDomainName string
 }
 
 func main() {
@@ -39,6 +42,7 @@ func main() {
 		TaskExecRoleName:     "go-template-dev-task-exec-role-cba5b03",
 		StreamRoleName:       "go-template-dev-dynamodb-stream-role-ab9505c",
 		SESVerificationToken: "kd3ga0FxChDm+EhBekEaLcVOUT8WGR2Y5aIGEP1cyjc=",
+		ApiDomainName:        "dev-template-api.quinnweber.com",
 	}, &awscdk.StackProps{
 		Env: &awscdk.Environment{
 			Account: jsii.String(account),
@@ -55,6 +59,7 @@ func main() {
 		TaskExecRoleName:     "go-template-prod-task-exec-role-1e22472",
 		StreamRoleName:       "go-template-prod-dynamodb-stream-role-cdb3149",
 		SESVerificationToken: "6ik66Ah6X7aAWRI4T5ILMtJ0KW4vbpHVpDufXGlpw/Y=",
+		ApiDomainName:        "template-api.quinnweber.com",
 	}, &awscdk.StackProps{
 		Env: &awscdk.Environment{
 			Account: jsii.String(account),

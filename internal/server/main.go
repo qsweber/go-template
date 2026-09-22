@@ -44,11 +44,11 @@ func (s *ServerImpl) Handle(ctx context.Context, req Request) Response {
 	}
 
 	switch req.Path {
-	case "/ping":
+	case "/v1/ping":
 		return s.Ping()
-	case "/record-click":
+	case "/v1/record-click":
 		return s.RecordClick(ctx, req)
-	case "/click-count":
+	case "/v1/click-count":
 		return s.GetClickCount(ctx)
 	default:
 		return errorResponse(404, errors.New("route not found"))
@@ -80,6 +80,7 @@ func (s *ServerImpl) authenticateRequest(ctx context.Context, req Request) (*aut
 func corsHeaders() map[string]string {
 	return map[string]string{
 		"Access-Control-Allow-Origin": "*",
+		"Cache-Control":               "no-store",
 	}
 }
 
@@ -88,6 +89,7 @@ func preflightHeaders() map[string]string {
 		"Access-Control-Allow-Origin":  "*",
 		"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 		"Access-Control-Allow-Headers": "Content-Type, Authorization",
+		"Cache-Control":                "no-store",
 	}
 }
 
