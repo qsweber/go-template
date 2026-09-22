@@ -16,7 +16,7 @@ jobs:
           go-version: 1.25.8
       - name: Check formatting
         run: |
-          UNFORMATTED=$(gofmt -l $(find . -name '*.go' -not -path './vendor/*' -not -path '*/node_modules/*'))
+          UNFORMATTED=$(gofmt -l $(find . -name '*.go' -not -path './vendor/*' -not -path './cdk/*'))
           if [ -n "$UNFORMATTED" ]; then
             echo "These files are not gofmt-formatted:"
             echo "$UNFORMATTED"
@@ -24,28 +24,47 @@ jobs:
           fi
       - name: Run go vet
         run: go vet ./...
-      - name: Run go vet (cdk)
-        run: cd cdk && go vet .
       - run: make build-apigateway-lambda
       - run: make build-dynamostream-lambda
       - run: go version
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Install CDK CLI
-        run: cd cdk && npm ci
-      - name: Validate CDK app synthesizes
-        run: cd cdk && npx cdk synth --all
       - uses: actions/upload-artifact@v4.6.2
         with:
           name: build
           path: |
             ./handler.zip
             ./stream.zip
+  cdk-checks:
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v5.5.0
+        with:
+          go-version: 1.25.8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4.3.0
+        with:
+          name: build
+      - name: Check formatting (cdk)
+        run: |
+          UNFORMATTED=$(gofmt -l $(find ./cdk -name '*.go' -not -path './cdk/node_modules/*'))
+          if [ -n "$UNFORMATTED" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+      - name: Run go vet (cdk)
+        run: cd cdk && go vet .
+      - name: Install CDK CLI
+        run: cd cdk && npm ci
+      - name: Validate CDK app synthesizes
+        run: cd cdk && npx cdk synth --all
   deploy_dev:
     runs-on: ubuntu-latest
     environment: dev
-    needs: [build]
+    needs: [build, cdk-checks]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-go@v5.5.0
@@ -75,7 +94,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: prod
-    needs: [build]
+    needs: [build, cdk-checks]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-go@v5.5.0
