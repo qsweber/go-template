@@ -80,6 +80,7 @@ func (s *ServerImpl) authenticateRequest(ctx context.Context, req Request) (*aut
 func corsHeaders() map[string]string {
 	return map[string]string{
 		"Access-Control-Allow-Origin": "*",
+		"Cache-Control":               "no-store",
 	}
 }
 
@@ -88,6 +89,7 @@ func preflightHeaders() map[string]string {
 		"Access-Control-Allow-Origin":  "*",
 		"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 		"Access-Control-Allow-Headers": "Content-Type, Authorization",
+		"Cache-Control":                "no-store",
 	}
 }
 
