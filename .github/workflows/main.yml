@@ -82,8 +82,9 @@ jobs:
         run: cd cdk && npx cdk deploy go-template-dev --require-approval never
       - name: Verify deployed API (/ping)
         run: |
-          INVOCATION_URL=$(aws cloudformation describe-stacks --stack-name go-template-dev --region "$AWS_REGION" --query "Stacks[0].Outputs[?OutputKey=='InvocationURL'].OutputValue" --output text)
-          PING_URL=$(echo "$INVOCATION_URL" | sed 's|/{message}$|/ping|')
+          CUSTOM_DOMAIN_URL=$(aws cloudformation describe-stacks --stack-name go-template-dev --region "$AWS_REGION" --query "Stacks[0].Outputs[?OutputKey=='CustomDomainURL'].OutputValue" --output text)
+          PING_URL=$(echo "$CUSTOM_DOMAIN_URL" | sed 's|/{message}$|/ping|')
+          PING_URL="${PING_URL}?cb=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "Calling $PING_URL"
           curl --fail --show-error --silent "$PING_URL"
     env:
@@ -112,8 +113,9 @@ jobs:
         run: cd cdk && npx cdk deploy go-template-prod --require-approval never
       - name: Verify deployed API (/ping)
         run: |
-          INVOCATION_URL=$(aws cloudformation describe-stacks --stack-name go-template-prod --region "$AWS_REGION" --query "Stacks[0].Outputs[?OutputKey=='InvocationURL'].OutputValue" --output text)
-          PING_URL=$(echo "$INVOCATION_URL" | sed 's|/{message}$|/ping|')
+          CUSTOM_DOMAIN_URL=$(aws cloudformation describe-stacks --stack-name go-template-prod --region "$AWS_REGION" --query "Stacks[0].Outputs[?OutputKey=='CustomDomainURL'].OutputValue" --output text)
+          PING_URL=$(echo "$CUSTOM_DOMAIN_URL" | sed 's|/{message}$|/ping|')
+          PING_URL="${PING_URL}?cb=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "Calling $PING_URL"
           curl --fail --show-error --silent "$PING_URL"
     env:
