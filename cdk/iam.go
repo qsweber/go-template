@@ -49,11 +49,9 @@ var dynamoDBPolicyDocument = map[string]interface{}{
 	},
 }
 
-// createBaseRole recreates the Lambda execution role Pulumi built from two resources
-// (an iam.Role plus two attached iam.RolePolicy resources for logging and DynamoDB access).
-// CloudFormation has no standalone "attached role policy" resource for inline policies -
-// they are just entries in the Role's own Policies property - so both inline policies are
-// embedded directly on the CfnRole here.
+// createBaseRole builds the shared Lambda execution role. CloudFormation has no standalone
+// "attached role policy" resource for inline policies - they are just entries in the Role's
+// own Policies property - so both inline policies are embedded directly on the CfnRole here.
 func createBaseRole(scope constructs.Construct, projectStackName string, cfg EnvConfig) awsiam.CfnRole {
 	role := awsiam.NewCfnRole(scope, jsii.String("TaskExecRole"), &awsiam.CfnRoleProps{
 		RoleName:                 jsii.String(cfg.TaskExecRoleName),

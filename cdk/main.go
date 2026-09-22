@@ -5,9 +5,9 @@ import (
 	"github.com/aws/jsii-runtime-go"
 )
 
-// EnvConfig mirrors what used to be per-stack Pulumi config (Pulumi.dev.yaml / Pulumi.prod.yaml),
-// plus the pre-existing physical resource names/values that need to be preserved so that
-// `cdk import` can adopt the already-deployed AWS resources without replacing them.
+// EnvConfig holds the per-stack (dev/prod) settings, plus the pre-existing physical resource
+// names/values that need to be preserved so that `cdk import` can adopt the already-deployed
+// AWS resources without replacing them.
 type EnvConfig struct {
 	Env        string
 	Account    string
@@ -15,7 +15,7 @@ type EnvConfig struct {
 	DomainName string
 	ZoneID     string
 
-	// Physical names of already-deployed resources that Pulumi auto-named (random suffix).
+	// Physical names of already-deployed resources (with their pre-existing random suffix).
 	// These must match exactly for `cdk import` to adopt the existing resources.
 	TaskExecRoleName string
 	StreamRoleName   string

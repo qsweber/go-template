@@ -15,12 +15,10 @@ type SESResources struct {
 	EmailIdentity awsses.CfnEmailIdentity
 }
 
-// createSESResources ports the old Pulumi ses.DomainIdentity + ses.DomainDkim pair onto the
-// modern unified AWS::SES::EmailIdentity resource, since CloudFormation never had native
-// resource types for the legacy two-call verification flow. EmailIdentity's Easy DKIM
-// (3 CNAME tokens) supersedes the old TXT-based verification method; the legacy
-// "_amazonses.<domain>" TXT record is kept in parallel for continuity with what's already
-// published in DNS.
+// createSESResources uses the unified AWS::SES::EmailIdentity resource, CloudFormation's only
+// native resource type for SES domain verification. Its Easy DKIM (3 CNAME tokens) supersedes
+// the older TXT-based verification method; the legacy "_amazonses.<domain>" TXT record is kept
+// in parallel for continuity with what's already published in DNS.
 func createSESResources(scope constructs.Construct, projectStackName string, cfg EnvConfig) *SESResources {
 	emailIdentity := awsses.NewCfnEmailIdentity(scope, jsii.String("SESEmailIdentity"), &awsses.CfnEmailIdentityProps{
 		EmailIdentity: jsii.String(cfg.DomainName),
