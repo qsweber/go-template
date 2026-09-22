@@ -27,6 +27,13 @@ jobs:
       - run: make build-apigateway-lambda
       - run: make build-dynamostream-lambda
       - run: go version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install CDK CLI
+        run: cd cdk && npm ci
+      - name: Validate CDK app synthesizes
+        run: cd cdk && npx cdk synth --all
       - uses: actions/upload-artifact@v4.6.2
         with:
           name: build
@@ -42,22 +49,23 @@ jobs:
       - uses: actions/setup-go@v5.5.0
         with:
           go-version: 1.25.8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - uses: actions/download-artifact@v4.3.0
         with:
           name: build
-      - uses: pulumi/actions@v4
-        with:
-          pulumi-version: 3.244.0
-      - run: cd infrastructure && pulumi login ${{ secrets.PULUMI_CLOUD_URL }} && cd ..
-      - run: cd infrastructure && pulumi up --stack dev --non-interactive --yes && cd ..
+      - name: Install CDK CLI
+        run: cd cdk && npm ci
+      - name: Deploy dev stack
+        run: cd cdk && npx cdk deploy go-template-dev --require-approval never
       - name: Verify deployed API (/ping)
         run: |
-          INVOCATION_URL=$(cd infrastructure && pulumi stack output "invocation URL" --stack dev)
+          INVOCATION_URL=$(aws cloudformation describe-stacks --stack-name go-template-dev --region "$AWS_REGION" --query "Stacks[0].Outputs[?OutputKey=='InvocationURL'].OutputValue" --output text)
           PING_URL=$(echo "$INVOCATION_URL" | sed 's|/{message}$|/ping|')
           echo "Calling $PING_URL"
           curl --fail --show-error --silent "$PING_URL"
     env:
-      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -71,22 +79,23 @@ jobs:
       - uses: actions/setup-go@v5.5.0
         with:
           go-version: 1.25.8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - uses: actions/download-artifact@v4.3.0
         with:
           name: build
-      - uses: pulumi/actions@v4
-        with:
-          pulumi-version: 3.244.0
-      - run: cd infrastructure && pulumi login ${{ secrets.PULUMI_CLOUD_URL }} && cd ..
-      - run: cd infrastructure && pulumi up --stack prod --non-interactive --yes && cd ..
+      - name: Install CDK CLI
+        run: cd cdk && npm ci
+      - name: Deploy prod stack
+        run: cd cdk && npx cdk deploy go-template-prod --require-approval never
       - name: Verify deployed API (/ping)
         run: |
-          INVOCATION_URL=$(cd infrastructure && pulumi stack output "invocation URL" --stack prod)
+          INVOCATION_URL=$(aws cloudformation describe-stacks --stack-name go-template-prod --region "$AWS_REGION" --query "Stacks[0].Outputs[?OutputKey=='InvocationURL'].OutputValue" --output text)
           PING_URL=$(echo "$INVOCATION_URL" | sed 's|/{message}$|/ping|')
           echo "Calling $PING_URL"
           curl --fail --show-error --silent "$PING_URL"
     env:
-      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}

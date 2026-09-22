@@ -7,12 +7,12 @@ This repository contains:
 - An AWS Lambda stream consumer at cmd/dynamostream/main.go
 - Shared business logic in internal/server
 - Shared request routing in internal/rpc
-- Pulumi infrastructure code in infrastructure
+- AWS CDK (Go) infrastructure code in cdk
 
 ## Prerequisites
 
 1. Go 1.25.8+
-2. (Optional, for deployment) Pulumi CLI and AWS credentials
+2. (Optional, for deployment) Node.js 20+, the AWS CDK CLI, and AWS credentials
 
 ## Run The API Locally
 
@@ -93,29 +93,45 @@ This produces:
 - bootstrap
 - stream.zip
 
-## Deploy With Pulumi
+## Deploy With CDK
 
-1. Initialize/select a stack:
+The `cdk/` directory is a standalone Go module containing a CDK app that defines two stacks,
+`go-template-dev` and `go-template-prod`, each targeting `us-west-2`.
 
-```bash
-pulumi stack init dev
-```
-
-2. Set AWS region:
+1. Install the pinned CDK CLI (only needed once):
 
 ```bash
-pulumi config set aws:region us-west-2
+cd cdk && npm install
 ```
 
-3. Deploy:
+2. One-time per AWS account/region, bootstrap the CDK toolkit:
 
 ```bash
-pulumi up
+npx cdk bootstrap aws://<account-id>/us-west-2
 ```
 
-4. Tear down when done:
+3. Build the Lambda artifacts (from the repo root) so the CDK app has something to package:
 
 ```bash
-pulumi destroy --yes
-pulumi stack rm --yes
+make build-apigateway-lambda
+make build-dynamostream-lambda
 ```
+
+4. Review and deploy a stack:
+
+```bash
+cd cdk
+npx cdk diff go-template-dev
+npx cdk deploy go-template-dev
+```
+
+Swap `go-template-dev` for `go-template-prod` to deploy the other environment.
+
+5. Tear down when done:
+
+```bash
+npx cdk destroy go-template-dev
+```
+
+Note: the Cognito user pool/client, SES domain identity, and its Route53 DNS records are
+deployed with a `RETAIN` removal policy, so `cdk destroy` will leave them in place.
