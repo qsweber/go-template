@@ -25,6 +25,8 @@ func NewGoTemplateStack(scope constructs.Construct, id string, cfg EnvConfig, pr
 
 	apigatewayResources := createAPIGatewayResources(stack, projectStackName, cfg, role, dynamoResources, cognitoResources)
 
+	createCustomDomainResources(stack, cfg, apigatewayResources.Gateway, cfg.Env)
+
 	awscdk.NewCfnOutput(stack, jsii.String("LambdaName"), &awscdk.CfnOutputProps{
 		Value: apigatewayResources.Function.FunctionName(),
 	})
@@ -41,6 +43,9 @@ func NewGoTemplateStack(scope constructs.Construct, id string, cfg EnvConfig, pr
 			cfg.Region,
 			cfg.Env,
 		)),
+	})
+	awscdk.NewCfnOutput(stack, jsii.String("CustomDomainURL"), &awscdk.CfnOutputProps{
+		Value: jsii.String(fmt.Sprintf("https://%s/{message}", cfg.ApiDomainName)),
 	})
 
 	return stack
