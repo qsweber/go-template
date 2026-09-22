@@ -38,14 +38,14 @@ func NewGoTemplateStack(scope constructs.Construct, id string, cfg EnvConfig, pr
 	})
 	awscdk.NewCfnOutput(stack, jsii.String("InvocationURL"), &awscdk.CfnOutputProps{
 		Value: jsii.String(fmt.Sprintf(
-			"https://%s.execute-api.%s.amazonaws.com/%s/{message}",
+			"https://%s.execute-api.%s.amazonaws.com/%s/v1/{message}",
 			*apigatewayResources.Gateway.AttrRestApiId(),
 			cfg.Region,
 			cfg.Env,
 		)),
 	})
 	awscdk.NewCfnOutput(stack, jsii.String("CustomDomainURL"), &awscdk.CfnOutputProps{
-		Value: jsii.String(fmt.Sprintf("https://%s/{message}", cfg.ApiDomainName)),
+		Value: jsii.String(fmt.Sprintf("https://%s/v1/{message}", cfg.ApiDomainName)),
 	})
 
 	return stack

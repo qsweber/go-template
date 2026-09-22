@@ -44,11 +44,11 @@ func (s *ServerImpl) Handle(ctx context.Context, req Request) Response {
 	}
 
 	switch req.Path {
-	case "/ping":
+	case "/v1/ping":
 		return s.Ping()
-	case "/record-click":
+	case "/v1/record-click":
 		return s.RecordClick(ctx, req)
-	case "/click-count":
+	case "/v1/click-count":
 		return s.GetClickCount(ctx)
 	default:
 		return errorResponse(404, errors.New("route not found"))
