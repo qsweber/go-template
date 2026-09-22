@@ -1,3 +1,0 @@
-name: go-template
-runtime: go
-description: Basic template of an AWS lambda With API Gateway

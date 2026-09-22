@@ -1,3 +1,7 @@
 handler.zip
 stream.zip
 bootstrap
+
+cdk/node_modules/
+cdk/cdk.out/
+cdk/cdk
