@@ -23,9 +23,10 @@ func init() {
 func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	srv := server.New(serviceCtx)
 	req := server.Request{
-		Method:  request.RequestContext.HTTP.Method,
-		Path:    request.RawPath,
-		Headers: request.Headers,
+		Method:      request.RequestContext.HTTP.Method,
+		Path:        request.RawPath,
+		Headers:     request.Headers,
+		QueryParams: request.QueryStringParameters,
 	}
 
 	resp := srv.Handle(ctx, req)

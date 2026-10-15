@@ -10,9 +10,10 @@ import (
 )
 
 type Request struct {
-	Method  string
-	Path    string
-	Headers map[string]string
+	Method      string
+	Path        string
+	Headers     map[string]string
+	QueryParams map[string]string
 }
 
 type Response struct {
@@ -24,6 +25,7 @@ type Response struct {
 type Server interface {
 	Handle(ctx context.Context, req Request) Response
 	Ping() Response
+	GetUser(ctx context.Context, req Request) Response
 }
 
 type ServerImpl struct {
@@ -44,6 +46,11 @@ func (s *ServerImpl) Handle(ctx context.Context, req Request) Response {
 	switch req.Path {
 	case "/v1/ping":
 		return s.Ping()
+	case "/v1/user":
+		if req.Method != "GET" {
+			return errorResponse(405, errors.New("method not allowed"))
+		}
+		return s.GetUser(ctx, req)
 	default:
 		return errorResponse(404, errors.New("route not found"))
 	}

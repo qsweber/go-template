@@ -30,6 +30,8 @@ func UserPartitionKey(id string) string {
 
 type UsersRepository interface {
 	CreateUser(ctx context.Context, id string, email string) error
+	// GetUser returns the user with the given id, or nil if no such user exists.
+	GetUser(ctx context.Context, id string) (*User, error)
 }
 
 type UsersRepositoryImpl struct {
@@ -70,4 +72,26 @@ func (r *UsersRepositoryImpl) CreateUser(ctx context.Context, id string, email s
 		return nil
 	}
 	return err
+}
+
+func (r *UsersRepositoryImpl) GetUser(ctx context.Context, id string) (*User, error) {
+	out, err := r.client.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(r.tableName),
+		Key: map[string]types.AttributeValue{
+			PartitionKeyAttribute: &types.AttributeValueMemberS{Value: UserPartitionKey(id)},
+			SortKeyAttribute:      &types.AttributeValueMemberS{Value: UserSortKey},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if out.Item == nil {
+		return nil, nil
+	}
+
+	var user User
+	if err := attributevalue.UnmarshalMap(out.Item, &user); err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
