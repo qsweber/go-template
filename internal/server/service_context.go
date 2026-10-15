@@ -38,13 +38,13 @@ func NewServiceContext(ctx context.Context) (ServiceContext, error) {
 	}
 	dynamoDBClient := dynamodb.NewFromConfig(cfg)
 
-	// Create clicks repository
-	clicksTableName := os.Getenv("CLICKS_TABLE")
-	if clicksTableName == "" {
-		return ServiceContext{}, errors.New("CLICKS_TABLE environment variable is not set")
+	// Create repositories backed by the single records table
+	recordsTableName := os.Getenv("RECORDS_TABLE")
+	if recordsTableName == "" {
+		return ServiceContext{}, errors.New("RECORDS_TABLE environment variable is not set")
 	}
-	sc.Repositories.Clicks = repositories.NewClicksRepository(clicksTableName, dynamoDBClient)
-	log.Printf("Initialized DynamoDB clicks table: %s", clicksTableName)
+	sc.Repositories.Users = repositories.NewUsersRepository(recordsTableName, dynamoDBClient)
+	log.Printf("Initialized DynamoDB records table: %s", recordsTableName)
 
 	return sc, nil
 }

@@ -26,7 +26,7 @@ func createAPIGatewayResources(
 	cognitoResources *CognitoResources,
 ) *APIGatewayResources {
 	envVars := map[string]*string{
-		"CLICKS_TABLE": dynamoResources.ClicksTable.Ref(),
+		"RECORDS_TABLE": dynamoResources.RecordsTable.Ref(),
 	}
 	if cognitoResources != nil {
 		envVars["COGNITO_REGION"] = jsii.String(cfg.Region)

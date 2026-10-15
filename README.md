@@ -5,6 +5,7 @@ This repository contains:
 - A local HTTP API entrypoint at cmd/api/main.go
 - An AWS Lambda entrypoint at cmd/apigateway/main.go
 - An AWS Lambda stream consumer at cmd/dynamostream/main.go
+- An AWS Lambda Cognito PostConfirmation trigger at cmd/postconfirmation/main.go
 - Shared business logic in internal/server
 - Shared request routing in internal/rpc
 - AWS CDK (Go) infrastructure code in cdk
@@ -86,12 +87,38 @@ For the DynamoDB stream consumer, use:
 
 ```bash
 make build-dynamostream-lambda
+make build-postconfirmation-lambda
 ```
 
 This produces:
 
 - bootstrap
 - stream.zip
+
+For the Cognito PostConfirmation trigger, use:
+
+```bash
+make build-postconfirmation-lambda
+```
+
+This produces:
+
+- bootstrap
+- postconfirmation.zip
+
+## Data Model
+
+The app uses a single-table DynamoDB design. Each stack owns one table, `go-template-<env>-records`,
+with a string partition key `pk` and string sort key `sk`. Entities are distinguished by their key
+shapes:
+
+| Entity | pk          | sk     |
+| ------ | ----------- | ------ |
+| User   | `USER#<id>` | `USER` |
+
+User records are created by the Cognito PostConfirmation trigger when someone confirms their
+sign-up (`<id>` is the user's Cognito `sub`). The DynamoDB stream consumer is filtered to new
+`USER` records and logs each one.
 
 ## Deploy With CDK
 
@@ -115,6 +142,7 @@ npx cdk bootstrap aws://<account-id>/us-west-2
 ```bash
 make build-apigateway-lambda
 make build-dynamostream-lambda
+make build-postconfirmation-lambda
 ```
 
 4. Review and deploy a stack:

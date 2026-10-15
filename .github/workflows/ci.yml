@@ -41,6 +41,7 @@ jobs:
         run: go vet ./...
       - run: make build-apigateway-lambda
       - run: make build-dynamostream-lambda
+      - run: make build-postconfirmation-lambda
       - run: go version
       - uses: actions/upload-artifact@v7
         with:
@@ -48,6 +49,7 @@ jobs:
           path: |
             ./handler.zip
             ./stream.zip
+            ./postconfirmation.zip
 
   cdk-checks:
     runs-on: ubuntu-latest

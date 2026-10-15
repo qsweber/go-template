@@ -9,7 +9,7 @@ import (
 	"github.com/aws/jsii-runtime-go"
 )
 
-func createDynamoDBStreamResources(scope constructs.Construct, projectStackName string, cfg EnvConfig, clicksTable awsdynamodb.CfnTable) {
+func createDynamoDBStreamResources(scope constructs.Construct, projectStackName string, cfg EnvConfig, recordsTable awsdynamodb.CfnTable) {
 	streamPolicyDocument := map[string]interface{}{
 		"Version": "2012-10-17",
 		"Statement": []interface{}{
@@ -21,7 +21,7 @@ func createDynamoDBStreamResources(scope constructs.Construct, projectStackName 
 					"dynamodb:GetShardIterator",
 					"dynamodb:ListShards",
 				},
-				"Resource": *clicksTable.AttrStreamArn(),
+				"Resource": *recordsTable.AttrStreamArn(),
 			},
 			map[string]interface{}{
 				"Effect": "Allow",
@@ -64,12 +64,20 @@ func createDynamoDBStreamResources(scope constructs.Construct, projectStackName 
 	})
 	streamFunction.AddDependency(streamRole)
 
-	mapping := awslambda.NewCfnEventSourceMapping(scope, jsii.String("DynamoDBStreamClicksMapping"), &awslambda.CfnEventSourceMappingProps{
-		EventSourceArn:   clicksTable.AttrStreamArn(),
+	mapping := awslambda.NewCfnEventSourceMapping(scope, jsii.String("DynamoDBStreamRecordsMapping"), &awslambda.CfnEventSourceMappingProps{
+		EventSourceArn:   recordsTable.AttrStreamArn(),
 		FunctionName:     streamFunction.Ref(),
 		StartingPosition: jsii.String("LATEST"),
 		BatchSize:        jsii.Number(1),
 		Enabled:          jsii.Bool(true),
+		// Only invoke the function for newly inserted USER records.
+		FilterCriteria: &awslambda.CfnEventSourceMapping_FilterCriteriaProperty{
+			Filters: []interface{}{
+				&awslambda.CfnEventSourceMapping_FilterProperty{
+					Pattern: jsii.String(`{"eventName":["INSERT"],"dynamodb":{"NewImage":{"sk":{"S":["USER"]}}}}`),
+				},
+			},
+		},
 	})
 	mapping.AddDependency(streamFunction)
 }
