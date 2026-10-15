@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/qsweber/go-template/internal/repositories"
 )
 
 func handler(ctx context.Context, event events.DynamoDBEvent) error {
@@ -15,20 +15,29 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 			continue
 		}
 
-		userIDValue, ok := record.Change.NewImage["cognito_user_id"]
-		if !ok || userIDValue.String() == "" {
-			return fmt.Errorf("missing cognito_user_id in stream record")
+		image := record.Change.NewImage
+		if stringAttribute(image, repositories.SortKeyAttribute) != repositories.UserSortKey {
+			continue
 		}
 
-		occurredAtValue, ok := record.Change.NewImage["occurred_at"]
-		if !ok || occurredAtValue.Number() == "" {
-			return fmt.Errorf("missing occurred_at in stream record")
-		}
-
-		log.Printf("click stream event: cognito_user_id=%s occurred_at=%s", userIDValue.String(), occurredAtValue.Number())
+		log.Printf(
+			"new user created: id=%s email=%s",
+			stringAttribute(image, "id"),
+			stringAttribute(image, "email"),
+		)
 	}
 
 	return nil
+}
+
+// stringAttribute returns the named string attribute, or "" if it is absent or not a string
+// (DynamoDBAttributeValue.String panics on a type mismatch).
+func stringAttribute(image map[string]events.DynamoDBAttributeValue, name string) string {
+	value, ok := image[name]
+	if !ok || value.DataType() != events.DataTypeString {
+		return ""
+	}
+	return value.String()
 }
 
 func main() {

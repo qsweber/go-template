@@ -22,9 +22,10 @@ func init() {
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	srv := server.New(serviceCtx)
 	req := server.Request{
-		Method:  request.HTTPMethod,
-		Path:    request.Path,
-		Headers: request.Headers,
+		Method:      request.HTTPMethod,
+		Path:        request.Path,
+		Headers:     request.Headers,
+		QueryParams: request.QueryStringParameters,
 	}
 
 	resp := srv.Handle(ctx, req)

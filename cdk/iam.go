@@ -42,7 +42,7 @@ var dynamoDBPolicyDocument = map[string]interface{}{
 			"Effect": "Allow",
 			"Action": []interface{}{
 				"dynamodb:PutItem",
-				"dynamodb:DescribeTable",
+				"dynamodb:GetItem",
 			},
 			"Resource": "arn:aws:dynamodb:*:*:table/*",
 		},
