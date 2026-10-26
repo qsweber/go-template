@@ -14,6 +14,7 @@ type Request struct {
 	Path        string
 	Headers     map[string]string
 	QueryParams map[string]string
+	Body        string
 }
 
 type Response struct {
@@ -26,6 +27,7 @@ type Server interface {
 	Handle(ctx context.Context, req Request) Response
 	Ping() Response
 	GetUser(ctx context.Context, req Request) Response
+	UpdateUser(ctx context.Context, req Request) Response
 }
 
 type ServerImpl struct {
@@ -47,10 +49,14 @@ func (s *ServerImpl) Handle(ctx context.Context, req Request) Response {
 	case "/v1/ping":
 		return s.Ping()
 	case "/v1/user":
-		if req.Method != "GET" {
+		switch req.Method {
+		case "GET":
+			return s.GetUser(ctx, req)
+		case "PUT":
+			return s.UpdateUser(ctx, req)
+		default:
 			return errorResponse(405, errors.New("method not allowed"))
 		}
-		return s.GetUser(ctx, req)
 	default:
 		return errorResponse(404, errors.New("route not found"))
 	}

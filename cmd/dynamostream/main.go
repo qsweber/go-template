@@ -20,11 +20,7 @@ func handler(ctx context.Context, event events.DynamoDBEvent) error {
 			continue
 		}
 
-		log.Printf(
-			"new user created: id=%s email=%s",
-			stringAttribute(image, "id"),
-			stringAttribute(image, "email"),
-		)
+		log.Printf("new user created: id=%s", stringAttribute(image, "id"))
 	}
 
 	return nil

@@ -41,9 +41,7 @@ func handler(ctx context.Context, event events.CognitoEventUserPoolsPostConfirma
 	if userID == "" {
 		return event, fmt.Errorf("missing sub in post confirmation event")
 	}
-	email := event.Request.UserAttributes["email"]
-
-	if err := usersRepository.CreateUser(ctx, userID, email); err != nil {
+	if err := usersRepository.CreateUser(ctx, userID); err != nil {
 		return event, fmt.Errorf("failed to create user record: %w", err)
 	}
 
