@@ -43,6 +43,7 @@ var dynamoDBPolicyDocument = map[string]interface{}{
 			"Action": []interface{}{
 				"dynamodb:PutItem",
 				"dynamodb:GetItem",
+				"dynamodb:UpdateItem",
 			},
 			"Resource": "arn:aws:dynamodb:*:*:table/*",
 		},

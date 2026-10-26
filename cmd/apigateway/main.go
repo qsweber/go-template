@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"log"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -20,12 +21,22 @@ func init() {
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	body := request.Body
+	if request.IsBase64Encoded {
+		decoded, err := base64.StdEncoding.DecodeString(body)
+		if err != nil {
+			return events.APIGatewayProxyResponse{StatusCode: 400, Body: `{"error":"invalid base64 body"}`}, nil
+		}
+		body = string(decoded)
+	}
+
 	srv := server.New(serviceCtx)
 	req := server.Request{
 		Method:      request.HTTPMethod,
 		Path:        request.Path,
 		Headers:     request.Headers,
 		QueryParams: request.QueryStringParameters,
+		Body:        body,
 	}
 
 	resp := srv.Handle(ctx, req)
