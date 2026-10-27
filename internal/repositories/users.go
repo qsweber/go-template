@@ -39,10 +39,10 @@ type UsersRepository interface {
 
 type UsersRepositoryImpl struct {
 	tableName string
-	client    *dynamodb.Client
+	client    DynamoDBAPI
 }
 
-func NewUsersRepository(tableName string, client *dynamodb.Client) UsersRepository {
+func NewUsersRepository(tableName string, client DynamoDBAPI) UsersRepository {
 	return &UsersRepositoryImpl{
 		tableName: tableName,
 		client:    client,

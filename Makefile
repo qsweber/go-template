@@ -11,3 +11,6 @@ build-postconfirmation-lambda::
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./bootstrap ./cmd/postconfirmation/main.go
 	rm -f ./postconfirmation.zip
 	zip -j ./postconfirmation.zip ./bootstrap
+
+test::
+	go test -race ./...
