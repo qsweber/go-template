@@ -16,13 +16,10 @@ on:
         type: boolean
         default: true
         description: "Whether to run the deploy job"
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
-      AWS_REGION:
-        required: true
+
+permissions:
+  id-token: write # for AWS OIDC (aws-actions/configure-aws-credentials)
+  contents: read
 
 jobs:
   build:
@@ -97,6 +94,10 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: build
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::120356305272:role/github-actions-deploy
+          aws-region: us-west-2
       - name: Install CDK CLI
         run: cd cdk && npm ci
       - name: Deploy stack
@@ -109,7 +110,3 @@ jobs:
           PING_URL="${PING_URL}?cb=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "Calling $PING_URL"
           curl --fail --show-error --silent "$PING_URL"
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
