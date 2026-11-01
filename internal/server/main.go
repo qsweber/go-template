@@ -10,9 +10,11 @@ import (
 )
 
 type Request struct {
-	Method  string
-	Path    string
-	Headers map[string]string
+	Method      string
+	Path        string
+	Headers     map[string]string
+	QueryParams map[string]string
+	Body        string
 }
 
 type Response struct {
@@ -24,8 +26,8 @@ type Response struct {
 type Server interface {
 	Handle(ctx context.Context, req Request) Response
 	Ping() Response
-	RecordClick(ctx context.Context, req Request) Response
-	GetClickCount(ctx context.Context) Response
+	GetUser(ctx context.Context, req Request) Response
+	UpdateUser(ctx context.Context, req Request) Response
 }
 
 type ServerImpl struct {
@@ -46,10 +48,15 @@ func (s *ServerImpl) Handle(ctx context.Context, req Request) Response {
 	switch req.Path {
 	case "/v1/ping":
 		return s.Ping()
-	case "/v1/record-click":
-		return s.RecordClick(ctx, req)
-	case "/v1/click-count":
-		return s.GetClickCount(ctx)
+	case "/v1/user":
+		switch req.Method {
+		case "GET":
+			return s.GetUser(ctx, req)
+		case "PUT":
+			return s.UpdateUser(ctx, req)
+		default:
+			return errorResponse(405, errors.New("method not allowed"))
+		}
 	default:
 		return errorResponse(404, errors.New("route not found"))
 	}

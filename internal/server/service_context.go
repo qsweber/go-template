@@ -13,9 +13,16 @@ import (
 	"github.com/qsweber/go-template/internal/repositories"
 )
 
+// TokenVerifier verifies a bearer token and returns its claims. *auth.CognitoVerifier
+// satisfies it; tests substitute a fake.
+type TokenVerifier interface {
+	VerifyToken(ctx context.Context, token string) (*auth.Claims, error)
+}
+
 type ServiceContext struct {
-	Repositories    repositories.Repositories
-	CognitoVerifier *auth.CognitoVerifier
+	Repositories repositories.Repositories
+	// CognitoVerifier is nil when Cognito isn't configured, which disables authentication.
+	CognitoVerifier TokenVerifier
 }
 
 func NewServiceContext(ctx context.Context) (ServiceContext, error) {
@@ -38,13 +45,13 @@ func NewServiceContext(ctx context.Context) (ServiceContext, error) {
 	}
 	dynamoDBClient := dynamodb.NewFromConfig(cfg)
 
-	// Create clicks repository
-	clicksTableName := os.Getenv("CLICKS_TABLE")
-	if clicksTableName == "" {
-		return ServiceContext{}, errors.New("CLICKS_TABLE environment variable is not set")
+	// Create repositories backed by the single records table
+	recordsTableName := os.Getenv("RECORDS_TABLE")
+	if recordsTableName == "" {
+		return ServiceContext{}, errors.New("RECORDS_TABLE environment variable is not set")
 	}
-	sc.Repositories.Clicks = repositories.NewClicksRepository(clicksTableName, dynamoDBClient)
-	log.Printf("Initialized DynamoDB clicks table: %s", clicksTableName)
+	sc.Repositories.Users = repositories.NewUsersRepository(recordsTableName, dynamoDBClient)
+	log.Printf("Initialized DynamoDB records table: %s", recordsTableName)
 
 	return sc, nil
 }

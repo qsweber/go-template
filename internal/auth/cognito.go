@@ -184,8 +184,8 @@ func (v *CognitoVerifier) VerifyToken(ctx context.Context, tokenString string) (
 		return nil, fmt.Errorf("invalid issuer: expected %s, got %s", expectedIssuer, claims.Issuer)
 	}
 
-	// Verify the audience (client ID)
-	if claims.Audience[0] != v.config.ClientID {
+	// Verify the audience (client ID). Access tokens carry no aud claim, so guard the index.
+	if len(claims.Audience) == 0 || claims.Audience[0] != v.config.ClientID {
 		return nil, fmt.Errorf("invalid audience: expected %s, got %s", v.config.ClientID, claims.Audience)
 	}
 
@@ -194,8 +194,8 @@ func (v *CognitoVerifier) VerifyToken(ctx context.Context, tokenString string) (
 		return nil, fmt.Errorf("invalid token_use: expected id, got %s", claims.TokenUse)
 	}
 
-	// Verify expiration
-	if time.Now().After(claims.ExpiresAt.Time) {
+	// Verify expiration (the parser only checks exp when present, so require it here)
+	if claims.ExpiresAt == nil || time.Now().After(claims.ExpiresAt.Time) {
 		return nil, errors.New("token has expired")
 	}
 
