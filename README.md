@@ -9,6 +9,7 @@ This repository contains:
 - Shared business logic in internal/server
 - Shared request routing in internal/rpc
 - AWS CDK (Go) infrastructure code in cdk
+- Architecture docs in docs, starting with [the lifecycle of a request](docs/request-lifecycle.md)
 
 ## Prerequisites
 
