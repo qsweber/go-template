@@ -109,4 +109,6 @@ jobs:
           PING_URL=$(echo "$CUSTOM_DOMAIN_URL" | sed 's|/{message}$|/ping|')
           PING_URL="${PING_URL}?cb=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "Calling $PING_URL"
-          curl --fail --show-error --silent "$PING_URL"
+          # Retry for about a minute: a freshly created custom domain DNS record (or a resolver
+          # still caching the old one) can briefly fail the TLS handshake right after deploy.
+          curl --fail --show-error --silent --retry 10 --retry-delay 6 --retry-all-errors "$PING_URL"
