@@ -19,17 +19,18 @@ func init() {
 	}
 }
 
-func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+// handler receives HTTP API (payload format 2.0) events. Header names arrive lowercased.
+func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	srv := server.New(serviceCtx)
 	req := server.Request{
-		Method:  request.HTTPMethod,
-		Path:    request.Path,
+		Method:  request.RequestContext.HTTP.Method,
+		Path:    request.RawPath,
 		Headers: request.Headers,
 	}
 
 	resp := srv.Handle(ctx, req)
 
-	return events.APIGatewayProxyResponse{
+	return events.APIGatewayV2HTTPResponse{
 		StatusCode: resp.StatusCode,
 		Body:       resp.Body,
 		Headers:    resp.Headers,
