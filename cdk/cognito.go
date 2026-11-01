@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscognito"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsses"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
@@ -13,7 +14,7 @@ type CognitoResources struct {
 	UserPoolClient awscognito.CfnUserPoolClient
 }
 
-func createCognitoResources(scope constructs.Construct, projectStackName string, cfg EnvConfig, sesIdentity awsses.CfnEmailIdentity) *CognitoResources {
+func createCognitoResources(scope constructs.Construct, projectStackName string, cfg EnvConfig, sesIdentity awsses.CfnEmailIdentity, postConfirmationFunction awslambda.CfnFunction) *CognitoResources {
 	sesSourceArn := awscdk.Stack_Of(scope).FormatArn(&awscdk.ArnComponents{
 		Service:      jsii.String("ses"),
 		Resource:     jsii.String("identity"),
@@ -36,6 +37,9 @@ func createCognitoResources(scope constructs.Construct, projectStackName string,
 			EmailSendingAccount: jsii.String("DEVELOPER"),
 			From:                jsii.String("\"" + cfg.DomainName + "\" <no-reply@" + cfg.DomainName + ">"),
 			SourceArn:           sesSourceArn,
+		},
+		LambdaConfig: &awscognito.CfnUserPool_LambdaConfigProperty{
+			PostConfirmation: postConfirmationFunction.AttrArn(),
 		},
 		MfaConfiguration: jsii.String("OFF"),
 		Policies: &awscognito.CfnUserPool_PoliciesProperty{
@@ -66,6 +70,13 @@ func createCognitoResources(scope constructs.Construct, projectStackName string,
 	})
 	userPool.AddDependency(sesIdentity)
 	userPool.ApplyRemovalPolicy(awscdk.RemovalPolicy_RETAIN, nil)
+
+	awslambda.NewCfnPermission(scope, jsii.String("PostConfirmationPermission"), &awslambda.CfnPermissionProps{
+		Action:       jsii.String("lambda:InvokeFunction"),
+		FunctionName: postConfirmationFunction.Ref(),
+		Principal:    jsii.String("cognito-idp.amazonaws.com"),
+		SourceArn:    userPool.AttrArn(),
+	})
 
 	userPoolClient := awscognito.NewCfnUserPoolClient(scope, jsii.String("UserPoolClient"), &awscognito.CfnUserPoolClientProps{
 		UserPoolId:            userPool.Ref(),

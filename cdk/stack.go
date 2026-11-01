@@ -17,11 +17,13 @@ func NewGoTemplateStack(scope constructs.Construct, id string, cfg EnvConfig, pr
 
 	dynamoResources := createDynamoDBResources(stack, projectStackName)
 
-	createDynamoDBStreamResources(stack, projectStackName, cfg, dynamoResources.ClicksTable)
+	createDynamoDBStreamResources(stack, projectStackName, cfg, dynamoResources.RecordsTable)
+
+	postConfirmationFunction := createPostConfirmationFunction(stack, projectStackName, role, dynamoResources.RecordsTable)
 
 	sesResources := createSESResources(stack, projectStackName, cfg)
 
-	cognitoResources := createCognitoResources(stack, projectStackName, cfg, sesResources.EmailIdentity)
+	cognitoResources := createCognitoResources(stack, projectStackName, cfg, sesResources.EmailIdentity, postConfirmationFunction)
 
 	apigatewayResources := createAPIGatewayResources(stack, projectStackName, cfg, role, dynamoResources, cognitoResources)
 
