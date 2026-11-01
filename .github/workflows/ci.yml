@@ -106,6 +106,10 @@ jobs:
         run: |
           STACK_NAME=go-template-${{ inputs.stack }}
           CUSTOM_DOMAIN_URL=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$AWS_REGION" --query "Stacks[0].Outputs[?OutputKey=='CustomDomainURL'].OutputValue" --output text)
+          # Fall back to the execute-api URL when the stack has no custom domain.
+          if [ -z "$CUSTOM_DOMAIN_URL" ] || [ "$CUSTOM_DOMAIN_URL" = "None" ]; then
+            CUSTOM_DOMAIN_URL=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --region "$AWS_REGION" --query "Stacks[0].Outputs[?OutputKey=='InvocationURL'].OutputValue" --output text)
+          fi
           PING_URL=$(echo "$CUSTOM_DOMAIN_URL" | sed 's|/{message}$|/ping|')
           PING_URL="${PING_URL}?cb=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "Calling $PING_URL"

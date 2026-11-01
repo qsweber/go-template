@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigateway"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3assets"
@@ -11,30 +11,10 @@ import (
 	"github.com/aws/jsii-runtime-go"
 )
 
-var gatewayPolicyDocument = map[string]interface{}{
-	"Version": "2012-10-17",
-	"Statement": []interface{}{
-		map[string]interface{}{
-			"Action": "sts:AssumeRole",
-			"Principal": map[string]interface{}{
-				"Service": "lambda.amazonaws.com",
-			},
-			"Effect": "Allow",
-			"Sid":    "",
-		},
-		map[string]interface{}{
-			"Action":    "execute-api:Invoke",
-			"Resource":  "*",
-			"Principal": "*",
-			"Effect":    "Allow",
-			"Sid":       "",
-		},
-	},
-}
-
 type APIGatewayResources struct {
 	Function awslambda.CfnFunction
-	Gateway  awsapigateway.CfnRestApi
+	Api      awsapigatewayv2.CfnApi
+	Stage    awsapigatewayv2.CfnStage
 }
 
 func createAPIGatewayResources(
@@ -73,66 +53,51 @@ func createAPIGatewayResources(
 	})
 	function.AddDependency(role)
 
-	gateway := awsapigateway.NewCfnRestApi(scope, jsii.String("RestApi"), &awsapigateway.CfnRestApiProps{
-		Name:        jsii.String(projectStackName + "-api"),
-		Description: jsii.String("An API Gateway for the " + projectStackName + " function"),
-		Policy:      gatewayPolicyDocument,
+	// An HTTP API (API Gateway v2) with a single catch-all route: all routing, CORS, and auth
+	// happen in the Go handler, so none of the REST API's extra features are needed.
+	api := awsapigatewayv2.NewCfnApi(scope, jsii.String("HttpApi"), &awsapigatewayv2.CfnApiProps{
+		Name:         jsii.String(projectStackName + "-api"),
+		Description:  jsii.String("An HTTP API for the " + projectStackName + " function"),
+		ProtocolType: jsii.String("HTTP"),
 	})
 
-	apiResource := awsapigateway.NewCfnResource(scope, jsii.String("GatewayResource"), &awsapigateway.CfnResourceProps{
-		RestApiId: gateway.AttrRestApiId(),
-		PathPart:  jsii.String("{proxy+}"),
-		ParentId:  gateway.AttrRootResourceId(),
+	integration := awsapigatewayv2.NewCfnIntegration(scope, jsii.String("HttpApiIntegration"), &awsapigatewayv2.CfnIntegrationProps{
+		ApiId:                api.Ref(),
+		IntegrationType:      jsii.String("AWS_PROXY"),
+		IntegrationUri:       function.AttrArn(),
+		PayloadFormatVersion: jsii.String("2.0"),
 	})
 
-	anyMethod := awsapigateway.NewCfnMethod(scope, jsii.String("AnyMethod"), &awsapigateway.CfnMethodProps{
-		HttpMethod:        jsii.String("ANY"),
-		AuthorizationType: jsii.String("NONE"),
-		RestApiId:         gateway.AttrRestApiId(),
-		ResourceId:        apiResource.AttrResourceId(),
-		Integration: &awsapigateway.CfnMethod_IntegrationProperty{
-			Type:                  jsii.String("AWS_PROXY"),
-			IntegrationHttpMethod: jsii.String("POST"),
-			Uri: jsii.String(fmt.Sprintf(
-				"arn:aws:apigateway:%s:lambda:path/2015-03-31/functions/%s/invocations",
-				cfg.Region,
-				*function.AttrArn(),
-			)),
-		},
+	route := awsapigatewayv2.NewCfnRoute(scope, jsii.String("HttpApiDefaultRoute"), &awsapigatewayv2.CfnRouteProps{
+		ApiId:    api.Ref(),
+		RouteKey: jsii.String("$default"),
+		Target:   jsii.String(fmt.Sprintf("integrations/%s", *integration.Ref())),
 	})
-	anyMethod.AddDependency(apiResource)
 
-	permission := awslambda.NewCfnPermission(scope, jsii.String("APIPermission"), &awslambda.CfnPermissionProps{
+	// The $default stage is served at the root of the invoke URL (no stage name in the path)
+	// and redeploys automatically whenever routes or integrations change.
+	stage := awsapigatewayv2.NewCfnStage(scope, jsii.String("HttpApiStage"), &awsapigatewayv2.CfnStageProps{
+		ApiId:      api.Ref(),
+		StageName:  jsii.String("$default"),
+		AutoDeploy: jsii.Bool(true),
+	})
+	stage.AddDependency(route)
+
+	awslambda.NewCfnPermission(scope, jsii.String("APIPermission"), &awslambda.CfnPermissionProps{
 		Action:       jsii.String("lambda:InvokeFunction"),
 		FunctionName: function.Ref(),
 		Principal:    jsii.String("apigateway.amazonaws.com"),
 		SourceArn: jsii.String(fmt.Sprintf(
-			"arn:aws:execute-api:%s:%s:%s/*/*/*",
+			"arn:aws:execute-api:%s:%s:%s/*",
 			cfg.Region,
 			cfg.Account,
-			*gateway.AttrRestApiId(),
+			*api.Ref(),
 		)),
 	})
-	permission.AddDependency(apiResource)
-
-	deployment := awsapigateway.NewCfnDeployment(scope, jsii.String("Deployment"), &awsapigateway.CfnDeploymentProps{
-		RestApiId:   gateway.AttrRestApiId(),
-		Description: jsii.String("API deployment"),
-	})
-	deployment.AddDependency(apiResource)
-	deployment.AddDependency(anyMethod)
-	deployment.AddDependency(function)
-	deployment.AddDependency(permission)
-
-	stage := awsapigateway.NewCfnStage(scope, jsii.String("Stage"), &awsapigateway.CfnStageProps{
-		RestApiId:    gateway.AttrRestApiId(),
-		StageName:    jsii.String(cfg.Env),
-		DeploymentId: deployment.AttrDeploymentId(),
-	})
-	stage.AddDependency(deployment)
 
 	return &APIGatewayResources{
 		Function: function,
-		Gateway:  gateway,
+		Api:      api,
+		Stage:    stage,
 	}
 }
