@@ -10,23 +10,24 @@ import (
 	"github.com/qsweber/go-template/internal/server"
 )
 
-type apiGatewayHandler func(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error)
+type apiGatewayHandler func(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error)
 
-// newHandler adapts API Gateway proxy events to the server's Request/Response types.
+// newHandler adapts HTTP API (payload format 2.0) events to the server's
+// Request/Response types. Header names arrive lowercased.
 func newHandler(srv server.Server) apiGatewayHandler {
-	return func(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	return func(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 		body := request.Body
 		if request.IsBase64Encoded {
 			decoded, err := base64.StdEncoding.DecodeString(body)
 			if err != nil {
-				return events.APIGatewayProxyResponse{StatusCode: 400, Body: `{"error":"invalid base64 body"}`}, nil
+				return events.APIGatewayV2HTTPResponse{StatusCode: 400, Body: `{"error":"invalid base64 body"}`}, nil
 			}
 			body = string(decoded)
 		}
 
 		req := server.Request{
-			Method:      request.HTTPMethod,
-			Path:        request.Path,
+			Method:      request.RequestContext.HTTP.Method,
+			Path:        request.RawPath,
 			Headers:     request.Headers,
 			QueryParams: request.QueryStringParameters,
 			Body:        body,
@@ -34,7 +35,7 @@ func newHandler(srv server.Server) apiGatewayHandler {
 
 		resp := srv.Handle(ctx, req)
 
-		return events.APIGatewayProxyResponse{
+		return events.APIGatewayV2HTTPResponse{
 			StatusCode: resp.StatusCode,
 			Body:       resp.Body,
 			Headers:    resp.Headers,

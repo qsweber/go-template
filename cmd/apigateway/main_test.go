@@ -30,13 +30,17 @@ func (f *fakeServer) UpdateUser(context.Context, server.Request) server.Response
 	return server.Response{}
 }
 
+var putContext = events.APIGatewayV2HTTPRequestContext{
+	HTTP: events.APIGatewayV2HTTPRequestContextHTTPDescription{Method: "PUT"},
+}
+
 func TestHandler_MapsRequestAndResponse(t *testing.T) {
 	srv := &fakeServer{resp: server.Response{StatusCode: 201, Body: `{"ok":true}`, Headers: map[string]string{"X-Test": "1"}}}
 
-	resp, err := newHandler(srv)(context.Background(), events.APIGatewayProxyRequest{
-		HTTPMethod:            "PUT",
-		Path:                  "/v1/user",
-		Headers:               map[string]string{"Authorization": "Bearer t"},
+	resp, err := newHandler(srv)(context.Background(), events.APIGatewayV2HTTPRequest{
+		RequestContext:        putContext,
+		RawPath:               "/v1/user",
+		Headers:               map[string]string{"authorization": "Bearer t"},
 		QueryStringParameters: map[string]string{"id": "user-1"},
 		Body:                  `{"display_name":"x"}`,
 	})
@@ -48,7 +52,7 @@ func TestHandler_MapsRequestAndResponse(t *testing.T) {
 	if got.Method != "PUT" || got.Path != "/v1/user" || got.Body != `{"display_name":"x"}` {
 		t.Errorf("request = %+v", got)
 	}
-	if got.Headers["Authorization"] != "Bearer t" || got.QueryParams["id"] != "user-1" {
+	if got.Headers["authorization"] != "Bearer t" || got.QueryParams["id"] != "user-1" {
 		t.Errorf("headers/query not passed through: %+v", got)
 	}
 	if resp.StatusCode != 201 || resp.Body != `{"ok":true}` || resp.Headers["X-Test"] != "1" {
@@ -59,9 +63,9 @@ func TestHandler_MapsRequestAndResponse(t *testing.T) {
 func TestHandler_DecodesBase64Body(t *testing.T) {
 	srv := &fakeServer{resp: server.Response{StatusCode: 200}}
 
-	_, err := newHandler(srv)(context.Background(), events.APIGatewayProxyRequest{
-		HTTPMethod:      "PUT",
-		Path:            "/v1/user",
+	_, err := newHandler(srv)(context.Background(), events.APIGatewayV2HTTPRequest{
+		RequestContext:  putContext,
+		RawPath:         "/v1/user",
 		Body:            base64.StdEncoding.EncodeToString([]byte(`{"display_name":"x"}`)),
 		IsBase64Encoded: true,
 	})
@@ -76,9 +80,9 @@ func TestHandler_DecodesBase64Body(t *testing.T) {
 func TestHandler_InvalidBase64Body(t *testing.T) {
 	srv := &fakeServer{}
 
-	resp, err := newHandler(srv)(context.Background(), events.APIGatewayProxyRequest{
-		HTTPMethod:      "PUT",
-		Path:            "/v1/user",
+	resp, err := newHandler(srv)(context.Background(), events.APIGatewayV2HTTPRequest{
+		RequestContext:  putContext,
+		RawPath:         "/v1/user",
 		Body:            "not base64!",
 		IsBase64Encoded: true,
 	})

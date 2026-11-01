@@ -1,39 +1,54 @@
 package main
 
 import (
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigateway"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscertificatemanager"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsroute53"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
 
-// sharedWildcardCertArn is the existing *.quinnweber.com ACM certificate in us-east-1,
-// already issued and reused by both environments' edge-optimized API Gateway custom domains.
-const sharedWildcardCertArn = "arn:aws:acm:us-east-1:120356305272:certificate/10f59a3f-a08e-4b8d-8a4c-f0a5fcb61e83"
-
-func createCustomDomainResources(scope constructs.Construct, cfg EnvConfig, gateway awsapigateway.CfnRestApi, stageName string) {
-	domainName := awsapigateway.NewCfnDomainName(scope, jsii.String("ApiDomainName"), &awsapigateway.CfnDomainNameProps{
-		DomainName:     jsii.String(cfg.ApiDomainName),
-		CertificateArn: jsii.String(sharedWildcardCertArn),
-		EndpointConfiguration: &awsapigateway.CfnDomainName_EndpointConfigurationProperty{
-			Types: jsii.Strings("EDGE"),
+// createCustomDomainResources serves the HTTP API at cfg.ApiDomainName through a regional
+// custom domain, with its own ACM certificate in the stack's region. CloudFormation creates the
+// certificate's DNS validation record in the hosted zone and waits for it to be issued.
+func createCustomDomainResources(scope constructs.Construct, cfg EnvConfig, api awsapigatewayv2.CfnApi, stage awsapigatewayv2.CfnStage) {
+	certificate := awscertificatemanager.NewCfnCertificate(scope, jsii.String("ApiCertificate"), &awscertificatemanager.CfnCertificateProps{
+		DomainName:       jsii.String(cfg.ApiDomainName),
+		ValidationMethod: jsii.String("DNS"),
+		DomainValidationOptions: []interface{}{
+			&awscertificatemanager.CfnCertificate_DomainValidationOptionProperty{
+				DomainName:   jsii.String(cfg.ApiDomainName),
+				HostedZoneId: jsii.String(cfg.ZoneID),
+			},
 		},
 	})
 
-	basePathMapping := awsapigateway.NewCfnBasePathMapping(scope, jsii.String("ApiBasePathMapping"), &awsapigateway.CfnBasePathMappingProps{
-		DomainName: domainName.Ref(),
-		RestApiId:  gateway.AttrRestApiId(),
-		Stage:      jsii.String(stageName),
+	domainName := awsapigatewayv2.NewCfnDomainName(scope, jsii.String("ApiRegionalDomainName"), &awsapigatewayv2.CfnDomainNameProps{
+		DomainName: jsii.String(cfg.ApiDomainName),
+		DomainNameConfigurations: []interface{}{
+			&awsapigatewayv2.CfnDomainName_DomainNameConfigurationProperty{
+				CertificateArn: certificate.Ref(),
+				EndpointType:   jsii.String("REGIONAL"),
+				SecurityPolicy: jsii.String("TLS_1_2"),
+			},
+		},
 	})
-	basePathMapping.AddDependency(domainName)
 
-	awsroute53.NewCfnRecordSet(scope, jsii.String("ApiDomainAliasRecord"), &awsroute53.CfnRecordSetProps{
+	// Map the domain root to the $default stage. Referencing the stage (rather than the literal
+	// "$default") makes the mapping wait for the stage to exist.
+	awsapigatewayv2.NewCfnApiMapping(scope, jsii.String("ApiMapping"), &awsapigatewayv2.CfnApiMappingProps{
+		ApiId:      api.Ref(),
+		DomainName: domainName.Ref(),
+		Stage:      stage.Ref(),
+	})
+
+	awsroute53.NewCfnRecordSet(scope, jsii.String("ApiRegionalDomainAliasRecord"), &awsroute53.CfnRecordSetProps{
 		Name:         jsii.String(cfg.ApiDomainName),
 		Type:         jsii.String("A"),
 		HostedZoneId: jsii.String(cfg.ZoneID),
 		AliasTarget: &awsroute53.CfnRecordSet_AliasTargetProperty{
-			DnsName:      domainName.AttrDistributionDomainName(),
-			HostedZoneId: domainName.AttrDistributionHostedZoneId(),
+			DnsName:      domainName.AttrRegionalDomainName(),
+			HostedZoneId: domainName.AttrRegionalHostedZoneId(),
 		},
 	})
 }

@@ -2,6 +2,7 @@ handler.zip
 stream.zip
 postconfirmation.zip
 bootstrap
+bootstrap-*
 
 cdk/node_modules/
 cdk/cdk.out/

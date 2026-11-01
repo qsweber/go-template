@@ -27,7 +27,7 @@ func NewGoTemplateStack(scope constructs.Construct, id string, cfg EnvConfig, pr
 
 	apigatewayResources := createAPIGatewayResources(stack, projectStackName, cfg, role, dynamoResources, cognitoResources)
 
-	createCustomDomainResources(stack, cfg, apigatewayResources.Gateway, cfg.Env)
+	createCustomDomainResources(stack, cfg, apigatewayResources.Api, apigatewayResources.Stage)
 
 	awscdk.NewCfnOutput(stack, jsii.String("LambdaName"), &awscdk.CfnOutputProps{
 		Value: apigatewayResources.Function.FunctionName(),
@@ -40,10 +40,9 @@ func NewGoTemplateStack(scope constructs.Construct, id string, cfg EnvConfig, pr
 	})
 	awscdk.NewCfnOutput(stack, jsii.String("InvocationURL"), &awscdk.CfnOutputProps{
 		Value: jsii.String(fmt.Sprintf(
-			"https://%s.execute-api.%s.amazonaws.com/%s/v1/{message}",
-			*apigatewayResources.Gateway.AttrRestApiId(),
+			"https://%s.execute-api.%s.amazonaws.com/v1/{message}",
+			*apigatewayResources.Api.Ref(),
 			cfg.Region,
-			cfg.Env,
 		)),
 	})
 	awscdk.NewCfnOutput(stack, jsii.String("CustomDomainURL"), &awscdk.CfnOutputProps{
