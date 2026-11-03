@@ -11,6 +11,17 @@ import (
 	"github.com/aws/jsii-runtime-go"
 )
 
+// Burst protection for the API. A flood beyond the stage limits gets 429s from API Gateway before
+// it reaches (and is billed as) Lambda invocations, and the reserved concurrency caps how many API
+// Lambda instances can run at once, so this function can't drain the account-wide concurrency
+// pool that every other Lambda in the account and region shares. Raise these if real traffic
+// approaches them.
+const (
+	apiThrottlingRateLimit  = 50  // steady-state requests per second, across all clients
+	apiThrottlingBurstLimit = 100 // requests that can arrive at once above the steady rate
+	apiReservedConcurrency  = 20  // max concurrent API Lambda instances
+)
+
 type APIGatewayResources struct {
 	Function awslambda.CfnFunction
 	Api      awsapigatewayv2.CfnApi
@@ -47,6 +58,7 @@ func createAPIGatewayResources(
 			S3Bucket: asset.S3BucketName(),
 			S3Key:    asset.S3ObjectKey(),
 		},
+		ReservedConcurrentExecutions: jsii.Number(apiReservedConcurrency),
 		Environment: &awslambda.CfnFunction_EnvironmentProperty{
 			Variables: envVars,
 		},
@@ -80,6 +92,10 @@ func createAPIGatewayResources(
 		ApiId:      api.Ref(),
 		StageName:  jsii.String("$default"),
 		AutoDeploy: jsii.Bool(true),
+		DefaultRouteSettings: &awsapigatewayv2.CfnStage_RouteSettingsProperty{
+			ThrottlingRateLimit:  jsii.Number(apiThrottlingRateLimit),
+			ThrottlingBurstLimit: jsii.Number(apiThrottlingBurstLimit),
+		},
 	})
 	stage.AddDependency(route)
 
