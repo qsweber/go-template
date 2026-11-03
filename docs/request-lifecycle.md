@@ -15,8 +15,8 @@ The other routes take a subset of the second path: `GET /v1/user` reads instead 
 | --- | --- | --- |
 | Route53 alias record | `cdk/domain.go` | Resolves `template-api.quinnweber.com` (`dev-template-api…` for dev) to the API Gateway regional endpoint in us-west-2. |
 | API Gateway custom domain | `cdk/domain.go` | Regional endpoint that terminates TLS with the domain's ACM certificate and maps the domain root to the HTTP API's `$default` stage. |
-| HTTP API | `cdk/apigateway.go` | API Gateway v2 with one catch-all `$default` route and an `AWS_PROXY` Lambda integration (payload format 2.0). It does no routing, auth, or CORS of its own. |
-| API Lambda | `cmd/apigateway`, `internal/server` | Converts the event to a `server.Request` and does routing, CORS, Cognito token verification, and data access. |
+| HTTP API | `cdk/apigateway.go` | API Gateway v2 with one catch-all `$default` route and an `AWS_PROXY` Lambda integration (payload format 2.0). Its stage throttles at 50 requests/second with bursts up to 100, answering `429` beyond that without invoking the Lambda. It does no routing, auth, or CORS of its own. |
+| API Lambda | `cmd/apigateway`, `internal/server` | Converts the event to a `server.Request` and does routing, CORS, Cognito token verification, and data access. Reserved concurrency caps it at 20 instances running at once. |
 | Cognito user pool | `cdk/cognito.go`, `internal/auth` | Handles sign-up and sign-in, issues the ID tokens the browser sends, serves the JWKS public keys the API verifies them with, and invokes the post-confirmation trigger. |
 | Post-confirmation Lambda | `cmd/postconfirmation`, `cdk/cognito_trigger.go` | Creates the user's record when they confirm their sign-up. |
 | DynamoDB records table | `cdk/dynamo.go`, `internal/repositories` | Single table holding every entity, keyed by `pk` and `sk`. A user is `pk = USER#<Cognito sub>`, `sk = USER`. Its stream emits each new item. |
@@ -90,6 +90,7 @@ sequenceDiagram
 
     Note over B,APIGW: A PUT with an Authorization header isn't a "simple" request,<br/>so the browser sends a CORS preflight first
     B->>APIGW: OPTIONS /v1/user?id=<sub>
+    Note over APIGW,L: Burst limits apply to every request, preflights included:<br/>stage throttle 50 req/s, burst 100 (over it: 429, no Lambda run)<br/>Lambda concurrency cap 20 (past it: invoke throttled)
     APIGW->>L: $default route → invoke (payload 2.0)
     opt Cold start (first request on a new execution environment)
         L->>L: main(): NewServiceContext loads Cognito config<br/>and creates the DynamoDB client
@@ -146,6 +147,13 @@ Notes:
    missing, the verifier is `nil` and authenticated routes return 401.
 6. **Response:** `email` comes from the caller's verified ID token, not the table, and
    `display_name` comes from the item `UpdateItem` returns.
+7. **Burst limits:** the `$default` stage allows 50 requests/second steady with bursts up to 100,
+   shared by all clients. Past that, API Gateway answers `429 Too Many Requests` before any Lambda
+   runs, so a flood costs no invocations. Separately, the API Lambda's reserved concurrency of 20
+   caps how many instances run at once (bounding cost) and guarantees it that capacity from the
+   account-wide pool. A request arriving while all 20 are busy is throttled by Lambda, and API
+   Gateway returns an error instead of a response. Both limits are constants at the top of
+   `cdk/apigateway.go`.
 
 ## Reading your user record
 
@@ -157,5 +165,6 @@ Notes:
   404 if the record doesn't exist.
 
 The preflight response doesn't set `Access-Control-Max-Age`, so browsers fall back to caching it
-for about 5 seconds, and nearly every authenticated request costs an extra round trip. Setting a
-longer max age in `preflightHeaders` would remove most of them.
+for about 5 seconds, and nearly every authenticated request costs an extra round trip. Each
+preflight is also a full request through the stage throttle and a Lambda invocation, so it uses up
+the burst limits too. Setting a longer max age in `preflightHeaders` would remove most of them.
