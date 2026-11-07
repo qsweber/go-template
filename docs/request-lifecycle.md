@@ -16,6 +16,7 @@ The other routes take a subset of the second path: `GET /v1/user` reads instead 
 | Route53 alias record | `cdk/domain.go` | Resolves `template-api.quinnweber.com` (`dev-template-api…` for dev) to the API Gateway regional endpoint in us-west-2. |
 | API Gateway custom domain | `cdk/domain.go` | Regional endpoint that terminates TLS with the domain's ACM certificate and maps the domain root to the HTTP API's `$default` stage. |
 | HTTP API | `cdk/apigateway.go` | API Gateway v2 with one catch-all `$default` route and an `AWS_PROXY` Lambda integration (payload format 2.0). Its stage throttles at 50 requests/second with bursts up to 100, answering `429` beyond that without invoking the Lambda. It does no routing, auth, or CORS of its own. |
+| API access logs | `cdk/apigateway.go` | One JSON line per request that reaches the stage, in the `/aws/apigateway/go-template-<env>-api-access` log group (kept 14 days). |
 | API Lambda | `cmd/apigateway`, `internal/server` | Converts the event to a `server.Request` and does routing, CORS, Cognito token verification, and data access. Reserved concurrency caps it at 20 instances running at once. |
 | Cognito user pool | `cdk/cognito.go`, `internal/auth` | Handles sign-up and sign-in, issues the ID tokens the browser sends, serves the JWKS public keys the API verifies them with, and invokes the post-confirmation trigger. |
 | Post-confirmation Lambda | `cmd/postconfirmation`, `cdk/cognito_trigger.go` | Creates the user's record when they confirm their sign-up. |
@@ -168,3 +169,30 @@ The preflight response doesn't set `Access-Control-Max-Age`, so browsers fall ba
 for about 5 seconds, and nearly every authenticated request costs an extra round trip. Each
 preflight is also a full request through the stage throttle and a Lambda invocation, so it uses up
 the burst limits too. Setting a longer max age in `preflightHeaders` would remove most of them.
+
+## Finding out who's calling the API
+
+The HTTP API's stage writes one JSON line per request to the
+`/aws/apigateway/go-template-<env>-api-access` log group. That includes requests that never reach
+the Lambda, such as throttled `429`s. Each line has the request ID and time, `sourceIp`,
+`userAgent`, `domainName`, `method`, `path`, `status`, response size and latency, the integration
+latency, and any error message. `domainName` shows whether a request came through the custom
+domain or straight to the `execute-api` hostname.
+
+To see what's generating traffic, run this in CloudWatch Logs Insights against that log group:
+
+```
+fields @timestamp, domainName, method, path, status, userAgent, sourceIp
+| stats count(*) as requests by domainName, method, path, status, userAgent
+| sort requests desc
+| limit 50
+```
+
+Typical sources of traffic that doesn't come from the website:
+
+- **Internet scanners:** probes for paths like `/.env` or `/wp-login.php`, usually with a script or
+  scanner user agent. The router answers them with a fast `404`.
+- **Certificate Transparency watchers:** every ACM certificate is published in public CT logs, and
+  scanners start probing a new hostname soon after its certificate is issued.
+- **CI:** every deploy, including pull request deploys to dev, calls `/v1/ping?cb=<run id>` with
+  `curl`.
