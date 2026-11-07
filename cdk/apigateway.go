@@ -7,7 +7,6 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3assets"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
@@ -46,8 +45,6 @@ var accessLogFormat = func() string {
 	}
 	return string(format)
 }()
-
-const accessLogRetentionDays = 14
 
 // CORS is configured on the API, so API Gateway answers browser preflights itself without
 // invoking the Lambda, and browsers cache the result for corsMaxAgeSeconds.
@@ -95,6 +92,7 @@ func createAPIGatewayResources(
 			S3Key:    asset.S3ObjectKey(),
 		},
 		ReservedConcurrentExecutions: jsii.Number(apiReservedConcurrency),
+		LoggingConfig:                functionLogging(scope, "APIGatewayFunctionLogs", projectStackName, "apigateway-function"),
 		Environment: &awslambda.CfnFunction_EnvironmentProperty{
 			Variables: envVars,
 		},
@@ -134,10 +132,7 @@ func createAPIGatewayResources(
 
 	// One access log line per request that reaches the stage, including ones answered without
 	// invoking the Lambda (throttled 429s, unmatched routes and preflights, for example).
-	accessLogGroup := awslogs.NewCfnLogGroup(scope, jsii.String("HttpApiAccessLogs"), &awslogs.CfnLogGroupProps{
-		LogGroupName:    jsii.String("/aws/apigateway/" + projectStackName + "-api-access"),
-		RetentionInDays: jsii.Number(accessLogRetentionDays),
-	})
+	accessLogGroup := newLogGroup(scope, "HttpApiAccessLogs", "/aws/apigateway/"+projectStackName+"-api-access")
 
 	// The $default stage is served at the root of the custom domain (no stage name in the path)
 	// and redeploys automatically whenever routes or integrations change.

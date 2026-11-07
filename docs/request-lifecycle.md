@@ -16,7 +16,8 @@ The other routes take a subset of the second path: `GET /v1/user` reads instead 
 | Route53 alias record | `cdk/domain.go` | Resolves `template-api.quinnweber.com` (`dev-template-api…` for dev) to the API Gateway regional endpoint in us-west-2. |
 | API Gateway custom domain | `cdk/domain.go` | Regional endpoint that terminates TLS with the domain's ACM certificate and maps the domain root to the HTTP API's `$default` stage. |
 | HTTP API | `cdk/apigateway.go` | API Gateway v2 with one `ANY /v1/{proxy+}` route and an `AWS_PROXY` Lambda integration (payload format 2.0). It answers CORS preflights itself, returns `404` for paths outside `/v1/` without invoking the Lambda, and its stage throttles at 50 requests/second with bursts up to 100, answering `429` beyond that. Its default `execute-api` endpoint is disabled, so the custom domain is the only way in. |
-| API access logs | `cdk/apigateway.go` | One JSON line per request that reaches the stage, in the `/aws/apigateway/go-template-<env>-api-access` log group (kept 14 days). |
+| API access logs | `cdk/apigateway.go` | One JSON line per request that reaches the stage, in the `/aws/apigateway/go-template-<env>-api-access` log group. |
+| Log groups | `cdk/logs.go` | Every log group the stack creates is kept for 30 days. Each Lambda logs to its own stack-managed group, `/go-template-<env>/<function>` (for example `/go-template-<env>/apigateway-function`), instead of the `/aws/lambda/...` group Lambda would create on its own, which never expires. |
 | API Lambda | `cmd/apigateway`, `internal/server` | Converts the event to a `server.Request` and does routing within `/v1/`, Cognito token verification, and data access. Reserved concurrency caps it at 20 instances running at once. |
 | Cognito user pool | `cdk/cognito.go`, `internal/auth` | Handles sign-up and sign-in, issues the ID tokens the browser sends, serves the JWKS public keys the API verifies them with, and invokes the post-confirmation trigger. |
 | Post-confirmation Lambda | `cmd/postconfirmation`, `cdk/cognito_trigger.go` | Creates the user's record when they confirm their sign-up. |
@@ -178,7 +179,7 @@ an empty `integrationLatency`). Each line has the request ID and time, `sourceIp
 any error message.
 
 The API Lambda also logs one JSON line per invocation (`"msg":"request"`) to its own log group,
-`/aws/lambda/go-template-<env>-apigateway-function`. Each line has `requestId`, `method`, `path`,
+`/go-template-<env>/apigateway-function`. Each line has `requestId`, `method`, `path`,
 `status`, `durationMs`, `sourceIp` and `userAgent`. The `requestId` matches the access log's, so a
 `REPORT` line in the Lambda's logs can be tied back to its caller. Headers, bodies and query strings
 are never logged, because they carry bearer tokens, user input and user ids.
