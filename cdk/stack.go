@@ -38,13 +38,6 @@ func NewGoTemplateStack(scope constructs.Construct, id string, cfg EnvConfig, pr
 	awscdk.NewCfnOutput(stack, jsii.String("CognitoUserPoolClientId"), &awscdk.CfnOutputProps{
 		Value: cognitoResources.UserPoolClient.AttrClientId(),
 	})
-	awscdk.NewCfnOutput(stack, jsii.String("InvocationURL"), &awscdk.CfnOutputProps{
-		Value: jsii.String(fmt.Sprintf(
-			"https://%s.execute-api.%s.amazonaws.com/v1/{message}",
-			*apigatewayResources.Api.Ref(),
-			cfg.Region,
-		)),
-	})
 	awscdk.NewCfnOutput(stack, jsii.String("CustomDomainURL"), &awscdk.CfnOutputProps{
 		Value: jsii.String(fmt.Sprintf("https://%s/v1/{message}", cfg.ApiDomainName)),
 	})

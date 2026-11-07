@@ -25,8 +25,7 @@ const (
 )
 
 // accessLogFormat is one JSON object per request, built from API Gateway's $context variables.
-// domainName tells custom-domain traffic apart from direct execute-api calls, and userAgent and
-// sourceIp make bots and scanners easy to spot.
+// userAgent and sourceIp make bots and scanners easy to spot.
 var accessLogFormat = func() string {
 	format, err := json.Marshal(map[string]string{
 		"requestId":          "$context.requestId",
@@ -49,6 +48,15 @@ var accessLogFormat = func() string {
 }()
 
 const accessLogRetentionDays = 14
+
+// CORS is configured on the API, so API Gateway answers browser preflights itself without
+// invoking the Lambda, and browsers cache the result for corsMaxAgeSeconds.
+var (
+	corsAllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	corsAllowHeaders = []string{"Content-Type", "Authorization"}
+)
+
+const corsMaxAgeSeconds = 86400
 
 type APIGatewayResources struct {
 	Function awslambda.CfnFunction
@@ -93,12 +101,20 @@ func createAPIGatewayResources(
 	})
 	function.AddDependency(role)
 
-	// An HTTP API (API Gateway v2) with a single catch-all route: all routing, CORS, and auth
-	// happen in the Go handler, so none of the REST API's extra features are needed.
+	// An HTTP API (API Gateway v2). API Gateway handles CORS preflights and rejects paths outside
+	// /v1/ before they reach the Lambda; routing within /v1/ and auth happen in the Go handler.
+	// The default execute-api endpoint is disabled, so the custom domain is the only way in.
 	api := awsapigatewayv2.NewCfnApi(scope, jsii.String("HttpApi"), &awsapigatewayv2.CfnApiProps{
-		Name:         jsii.String(projectStackName + "-api"),
-		Description:  jsii.String("An HTTP API for the " + projectStackName + " function"),
-		ProtocolType: jsii.String("HTTP"),
+		Name:                      jsii.String(projectStackName + "-api"),
+		Description:               jsii.String("An HTTP API for the " + projectStackName + " function"),
+		ProtocolType:              jsii.String("HTTP"),
+		DisableExecuteApiEndpoint: jsii.Bool(true),
+		CorsConfiguration: &awsapigatewayv2.CfnApi_CorsProperty{
+			AllowOrigins: jsii.Strings("*"),
+			AllowMethods: jsii.Strings(corsAllowMethods...),
+			AllowHeaders: jsii.Strings(corsAllowHeaders...),
+			MaxAge:       jsii.Number(corsMaxAgeSeconds),
+		},
 	})
 
 	integration := awsapigatewayv2.NewCfnIntegration(scope, jsii.String("HttpApiIntegration"), &awsapigatewayv2.CfnIntegrationProps{
@@ -108,21 +124,23 @@ func createAPIGatewayResources(
 		PayloadFormatVersion: jsii.String("2.0"),
 	})
 
-	route := awsapigatewayv2.NewCfnRoute(scope, jsii.String("HttpApiDefaultRoute"), &awsapigatewayv2.CfnRouteProps{
+	// Only /v1/... reaches the Lambda. Anything else (scanners probing /.env, /wp-login.php and
+	// so on) gets a 404 from API Gateway without an invocation.
+	route := awsapigatewayv2.NewCfnRoute(scope, jsii.String("HttpApiV1Route"), &awsapigatewayv2.CfnRouteProps{
 		ApiId:    api.Ref(),
-		RouteKey: jsii.String("$default"),
+		RouteKey: jsii.String("ANY /v1/{proxy+}"),
 		Target:   jsii.String(fmt.Sprintf("integrations/%s", *integration.Ref())),
 	})
 
-	// The $default stage is served at the root of the invoke URL (no stage name in the path)
-	// and redeploys automatically whenever routes or integrations change.
 	// One access log line per request that reaches the stage, including ones answered without
-	// invoking the Lambda (throttled 429s, for example).
+	// invoking the Lambda (throttled 429s, unmatched routes and preflights, for example).
 	accessLogGroup := awslogs.NewCfnLogGroup(scope, jsii.String("HttpApiAccessLogs"), &awslogs.CfnLogGroupProps{
 		LogGroupName:    jsii.String("/aws/apigateway/" + projectStackName + "-api-access"),
 		RetentionInDays: jsii.Number(accessLogRetentionDays),
 	})
 
+	// The $default stage is served at the root of the custom domain (no stage name in the path)
+	// and redeploys automatically whenever routes or integrations change.
 	stage := awsapigatewayv2.NewCfnStage(scope, jsii.String("HttpApiStage"), &awsapigatewayv2.CfnStageProps{
 		ApiId:      api.Ref(),
 		StageName:  jsii.String("$default"),
