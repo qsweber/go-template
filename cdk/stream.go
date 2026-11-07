@@ -53,10 +53,11 @@ func createDynamoDBStreamResources(scope constructs.Construct, projectStackName 
 	})
 
 	streamFunction := awslambda.NewCfnFunction(scope, jsii.String("DynamoDBStreamFunction"), &awslambda.CfnFunctionProps{
-		FunctionName: jsii.String(projectStackName + "-dynamodb-stream-function"),
-		Handler:      jsii.String("bootstrap"),
-		Role:         streamRole.AttrArn(),
-		Runtime:      jsii.String("provided.al2"),
+		FunctionName:  jsii.String(projectStackName + "-dynamodb-stream-function"),
+		Handler:       jsii.String("bootstrap"),
+		Role:          streamRole.AttrArn(),
+		LoggingConfig: functionLogging(scope, "DynamoDBStreamFunctionLogs", projectStackName, "dynamodb-stream-function"),
+		Runtime:       jsii.String("provided.al2"),
 		Code: &awslambda.CfnFunction_CodeProperty{
 			S3Bucket: asset.S3BucketName(),
 			S3Key:    asset.S3ObjectKey(),

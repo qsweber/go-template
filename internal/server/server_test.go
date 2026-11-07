@@ -122,7 +122,6 @@ func TestHandle_Routing(t *testing.T) {
 		path       string
 		wantStatus int
 	}{
-		{name: "preflight", method: "OPTIONS", path: "/v1/user", wantStatus: 200},
 		{name: "ping", method: "GET", path: "/v1/ping", wantStatus: 200},
 		{name: "unknown route", method: "GET", path: "/v1/nope", wantStatus: 404},
 		{name: "unsupported method on user", method: "DELETE", path: "/v1/user", wantStatus: 405},
@@ -133,17 +132,6 @@ func TestHandle_Routing(t *testing.T) {
 			resp := srv.Handle(context.Background(), Request{Method: tt.method, Path: tt.path})
 			assertStatus(t, resp, tt.wantStatus)
 		})
-	}
-}
-
-func TestHandle_PreflightAllowsPut(t *testing.T) {
-	resp := newTestServer(newFakeUsers()).Handle(context.Background(), Request{Method: "OPTIONS", Path: "/v1/user"})
-
-	if !strings.Contains(resp.Headers["Access-Control-Allow-Methods"], "PUT") {
-		t.Errorf("Allow-Methods = %q, want it to include PUT", resp.Headers["Access-Control-Allow-Methods"])
-	}
-	if !strings.Contains(resp.Headers["Access-Control-Allow-Headers"], "Authorization") {
-		t.Errorf("Allow-Headers = %q, want it to include Authorization", resp.Headers["Access-Control-Allow-Headers"])
 	}
 }
 

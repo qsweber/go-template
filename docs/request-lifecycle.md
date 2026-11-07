@@ -15,8 +15,10 @@ The other routes take a subset of the second path: `GET /v1/user` reads instead 
 | --- | --- | --- |
 | Route53 alias record | `cdk/domain.go` | Resolves `template-api.quinnweber.com` (`dev-template-api…` for dev) to the API Gateway regional endpoint in us-west-2. |
 | API Gateway custom domain | `cdk/domain.go` | Regional endpoint that terminates TLS with the domain's ACM certificate and maps the domain root to the HTTP API's `$default` stage. |
-| HTTP API | `cdk/apigateway.go` | API Gateway v2 with one catch-all `$default` route and an `AWS_PROXY` Lambda integration (payload format 2.0). Its stage throttles at 50 requests/second with bursts up to 100, answering `429` beyond that without invoking the Lambda. It does no routing, auth, or CORS of its own. |
-| API Lambda | `cmd/apigateway`, `internal/server` | Converts the event to a `server.Request` and does routing, CORS, Cognito token verification, and data access. Reserved concurrency caps it at 20 instances running at once. |
+| HTTP API | `cdk/apigateway.go` | API Gateway v2 with one `ANY /v1/{proxy+}` route and an `AWS_PROXY` Lambda integration (payload format 2.0). It answers CORS preflights itself, returns `404` for paths outside `/v1/` without invoking the Lambda, and its stage throttles at 50 requests/second with bursts up to 100, answering `429` beyond that. Its default `execute-api` endpoint is disabled, so the custom domain is the only way in. |
+| API access logs | `cdk/apigateway.go` | One JSON line per request that reaches the stage, in the `/aws/apigateway/go-template-<env>-api-access` log group. |
+| Log groups | `cdk/logs.go` | Every log group the stack creates is kept for 30 days. Each Lambda logs to its own stack-managed group, `/go-template-<env>/<function>` (for example `/go-template-<env>/apigateway-function`), instead of the `/aws/lambda/...` group Lambda would create on its own, which never expires. |
+| API Lambda | `cmd/apigateway`, `internal/server` | Converts the event to a `server.Request` and does routing within `/v1/`, Cognito token verification, and data access. Reserved concurrency caps it at 20 instances running at once. |
 | Cognito user pool | `cdk/cognito.go`, `internal/auth` | Handles sign-up and sign-in, issues the ID tokens the browser sends, serves the JWKS public keys the API verifies them with, and invokes the post-confirmation trigger. |
 | Post-confirmation Lambda | `cmd/postconfirmation`, `cdk/cognito_trigger.go` | Creates the user's record when they confirm their sign-up. |
 | DynamoDB records table | `cdk/dynamo.go`, `internal/repositories` | Single table holding every entity, keyed by `pk` and `sk`. A user is `pk = USER#<Cognito sub>`, `sk = USER`. Its stream emits each new item. |
@@ -90,17 +92,14 @@ sequenceDiagram
 
     Note over B,APIGW: A PUT with an Authorization header isn't a "simple" request,<br/>so the browser sends a CORS preflight first
     B->>APIGW: OPTIONS /v1/user?id=<sub>
-    Note over APIGW,L: Burst limits apply to every request, preflights included:<br/>stage throttle 50 req/s, burst 100 (over it: 429, no Lambda run)<br/>Lambda concurrency cap 20 (past it: invoke throttled)
-    APIGW->>L: $default route → invoke (payload 2.0)
+    APIGW-->>B: Preflight response: Access-Control-Allow-* headers, Max-Age 1 day<br/>(answered by API Gateway's CORS config, no Lambda run)
+
+    B->>APIGW: PUT /v1/user?id=<sub><br/>Authorization: Bearer <Cognito ID token><br/>{"display_name": "Quinn"}
+    Note over APIGW,L: Checked before invoking the Lambda:<br/>path outside /v1/: 404<br/>over 50 req/s (burst 100): 429<br/>all 20 Lambda instances busy: invoke throttled
+    APIGW->>L: ANY /v1/{proxy+} route → invoke (payload 2.0)
     opt Cold start (first request on a new execution environment)
         L->>L: main(): NewServiceContext loads Cognito config<br/>and creates the DynamoDB client
     end
-    L->>L: Handle: method is OPTIONS → preflight headers
-    L-->>APIGW: 200 + Access-Control-Allow-* headers
-    APIGW-->>B: 200
-
-    B->>APIGW: PUT /v1/user?id=<sub><br/>Authorization: Bearer <Cognito ID token><br/>{"display_name": "Quinn"}
-    APIGW->>L: $default route → invoke (payload 2.0)
     L->>L: APIGatewayV2HTTPRequest → server.Request<br/>(method, RawPath, lowercased headers, query params,<br/>body base64-decoded if needed)
     L->>L: Route: /v1/user + PUT → UpdateUser
     alt JWKS not cached, or older than 1 hour
@@ -135,19 +134,24 @@ Notes:
    directly. There is no CloudFront in front of the API.
 2. **TLS:** the handshake ends at API Gateway in us-west-2, using the certificate issued for the
    custom domain in that region. A browser reuses the connection for later requests, including the
-   real request after the preflight.
-3. **Routing:** API Gateway forwards every method and path through the `$default` route. All
-   routing happens in `internal/server`, including `OPTIONS` preflights, 404s for unknown paths,
-   and 405s for methods `/v1/user` doesn't support.
-4. **Cold start:** `main()` builds the service context once per Lambda execution environment,
+   real request after the preflight. The `execute-api` hostname is disabled, so this domain is the
+   only way to reach the API.
+3. **Routing:** API Gateway only forwards `/v1/...` paths, through the `ANY /v1/{proxy+}` route.
+   Other paths get a `404` from API Gateway without invoking the Lambda. Within `/v1/`,
+   `internal/server` routes the request and returns `404` for unknown paths and `405` for methods
+   `/v1/user` doesn't support.
+4. **Preflights:** CORS is configured on the HTTP API, so API Gateway answers `OPTIONS` preflights
+   itself, with `Access-Control-Max-Age` set to one day. Browsers cache the preflight result, so
+   repeat requests skip it, and preflights never invoke the Lambda.
+5. **Cold start:** `main()` builds the service context once per Lambda execution environment,
    before it starts taking requests. It reads configuration and creates clients but makes no
    network calls. Warm invocations skip it.
-5. **Auth:** the Cognito keys are cached in the execution environment for an hour, so most
+6. **Auth:** the Cognito keys are cached in the execution environment for an hour, so most
    requests verify the token without any network call. If the Cognito environment variables are
    missing, the verifier is `nil` and authenticated routes return 401.
-6. **Response:** `email` comes from the caller's verified ID token, not the table, and
+7. **Response:** `email` comes from the caller's verified ID token, not the table, and
    `display_name` comes from the item `UpdateItem` returns.
-7. **Burst limits:** the `$default` stage allows 50 requests/second steady with bursts up to 100,
+8. **Burst limits:** the `$default` stage allows 50 requests/second steady with bursts up to 100,
    shared by all clients. Past that, API Gateway answers `429 Too Many Requests` before any Lambda
    runs, so a flood costs no invocations. Separately, the API Lambda's reserved concurrency of 20
    caps how many instances run at once (bounding cost) and guarantees it that capacity from the
@@ -157,14 +161,44 @@ Notes:
 
 ## Reading your user record
 
-`GET /v1/user?id=<sub>` takes the same path as the update, including the preflight (the
-`Authorization` header triggers one for any method), with two differences:
+`GET /v1/user?id=<sub>` takes the same path as the update, including a preflight (the
+`Authorization` header triggers one for any method, though browsers reuse a cached preflight for a
+day), with two differences:
 
 - **No body validation:** there's no body to validate.
 - **A read instead of a write:** the Lambda calls `GetItem` on `USER#<sub>` / `USER` and returns
   404 if the record doesn't exist.
 
-The preflight response doesn't set `Access-Control-Max-Age`, so browsers fall back to caching it
-for about 5 seconds, and nearly every authenticated request costs an extra round trip. Each
-preflight is also a full request through the stage throttle and a Lambda invocation, so it uses up
-the burst limits too. Setting a longer max age in `preflightHeaders` would remove most of them.
+## Finding out who's calling the API
+
+The HTTP API's stage writes one JSON line per request to the
+`/aws/apigateway/go-template-<env>-api-access` log group. That includes requests that never reach
+the Lambda, such as preflights, throttled `429`s and `404`s for paths outside `/v1/` (those have
+an empty `integrationLatency`). Each line has the request ID and time, `sourceIp`, `userAgent`,
+`domainName`, `method`, `path`, `status`, response size and latency, the integration latency, and
+any error message.
+
+The API Lambda also logs one JSON line per invocation (`"msg":"request"`) to its own log group,
+`/go-template-<env>/apigateway-function`. Each line has `requestId`, `method`, `path`,
+`status`, `durationMs`, `sourceIp` and `userAgent`. The `requestId` matches the access log's, so a
+`REPORT` line in the Lambda's logs can be tied back to its caller. Headers, bodies and query strings
+are never logged, because they carry bearer tokens, user input and user ids.
+
+To see what's generating traffic, run this in CloudWatch Logs Insights against the access log group:
+
+```
+fields @timestamp, method, path, status, userAgent, sourceIp
+| stats count(*) as requests by method, path, status, userAgent
+| sort requests desc
+| limit 50
+```
+
+Typical sources of traffic that doesn't come from the website:
+
+- **Internet scanners:** probes for paths like `/.env` or `/wp-login.php`, usually with a script or
+  scanner user agent. API Gateway answers those outside `/v1/` with a `404` and never invokes the
+  Lambda.
+- **Certificate Transparency watchers:** every ACM certificate is published in public CT logs, and
+  scanners start probing a new hostname soon after its certificate is issued.
+- **CI:** every deploy, including pull request deploys to dev, calls `/v1/ping?cb=<run id>` with
+  `curl`.

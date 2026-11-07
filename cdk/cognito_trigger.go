@@ -18,10 +18,11 @@ func createPostConfirmationFunction(scope constructs.Construct, projectStackName
 	})
 
 	function := awslambda.NewCfnFunction(scope, jsii.String("PostConfirmationFunction"), &awslambda.CfnFunctionProps{
-		FunctionName: jsii.String(projectStackName + "-cognito-post-confirmation-function"),
-		Handler:      jsii.String("bootstrap"),
-		Role:         role.AttrArn(),
-		Runtime:      jsii.String("provided.al2"),
+		FunctionName:  jsii.String(projectStackName + "-cognito-post-confirmation-function"),
+		Handler:       jsii.String("bootstrap"),
+		Role:          role.AttrArn(),
+		LoggingConfig: functionLogging(scope, "PostConfirmationFunctionLogs", projectStackName, "cognito-post-confirmation-function"),
+		Runtime:       jsii.String("provided.al2"),
 		Code: &awslambda.CfnFunction_CodeProperty{
 			S3Bucket: asset.S3BucketName(),
 			S3Key:    asset.S3ObjectKey(),
