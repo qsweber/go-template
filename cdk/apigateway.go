@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3assets"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
@@ -21,6 +23,32 @@ const (
 	apiThrottlingBurstLimit = 100 // requests that can arrive at once above the steady rate
 	apiReservedConcurrency  = 20  // max concurrent API Lambda instances
 )
+
+// accessLogFormat is one JSON object per request, built from API Gateway's $context variables.
+// domainName tells custom-domain traffic apart from direct execute-api calls, and userAgent and
+// sourceIp make bots and scanners easy to spot.
+var accessLogFormat = func() string {
+	format, err := json.Marshal(map[string]string{
+		"requestId":          "$context.requestId",
+		"requestTime":        "$context.requestTime",
+		"sourceIp":           "$context.identity.sourceIp",
+		"userAgent":          "$context.identity.userAgent",
+		"domainName":         "$context.domainName",
+		"method":             "$context.httpMethod",
+		"path":               "$context.path",
+		"status":             "$context.status",
+		"responseLength":     "$context.responseLength",
+		"responseLatency":    "$context.responseLatency",
+		"integrationLatency": "$context.integrationLatency",
+		"errorMessage":       "$context.error.message",
+	})
+	if err != nil {
+		panic(err)
+	}
+	return string(format)
+}()
+
+const accessLogRetentionDays = 14
 
 type APIGatewayResources struct {
 	Function awslambda.CfnFunction
@@ -88,10 +116,21 @@ func createAPIGatewayResources(
 
 	// The $default stage is served at the root of the invoke URL (no stage name in the path)
 	// and redeploys automatically whenever routes or integrations change.
+	// One access log line per request that reaches the stage, including ones answered without
+	// invoking the Lambda (throttled 429s, for example).
+	accessLogGroup := awslogs.NewCfnLogGroup(scope, jsii.String("HttpApiAccessLogs"), &awslogs.CfnLogGroupProps{
+		LogGroupName:    jsii.String("/aws/apigateway/" + projectStackName + "-api-access"),
+		RetentionInDays: jsii.Number(accessLogRetentionDays),
+	})
+
 	stage := awsapigatewayv2.NewCfnStage(scope, jsii.String("HttpApiStage"), &awsapigatewayv2.CfnStageProps{
 		ApiId:      api.Ref(),
 		StageName:  jsii.String("$default"),
 		AutoDeploy: jsii.Bool(true),
+		AccessLogSettings: &awsapigatewayv2.CfnStage_AccessLogSettingsProperty{
+			DestinationArn: accessLogGroup.AttrArn(),
+			Format:         jsii.String(accessLogFormat),
+		},
 		DefaultRouteSettings: &awsapigatewayv2.CfnStage_RouteSettingsProperty{
 			ThrottlingRateLimit:  jsii.Number(apiThrottlingRateLimit),
 			ThrottlingBurstLimit: jsii.Number(apiThrottlingBurstLimit),
