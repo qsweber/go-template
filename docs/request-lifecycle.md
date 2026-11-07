@@ -179,7 +179,13 @@ the Lambda, such as throttled `429`s. Each line has the request ID and time, `so
 latency, and any error message. `domainName` shows whether a request came through the custom
 domain or straight to the `execute-api` hostname.
 
-To see what's generating traffic, run this in CloudWatch Logs Insights against that log group:
+The API Lambda also logs one JSON line per invocation (`"msg":"request"`) to its own log group,
+`/aws/lambda/go-template-<env>-apigateway-function`. Each line has `requestId`, `method`, `path`,
+`status`, `durationMs`, `sourceIp` and `userAgent`. The `requestId` matches the access log's, so a
+`REPORT` line in the Lambda's logs can be tied back to its caller. Headers, bodies and query strings
+are never logged, because they carry bearer tokens, user input and user ids.
+
+To see what's generating traffic, run this in CloudWatch Logs Insights against the access log group:
 
 ```
 fields @timestamp, domainName, method, path, status, userAgent, sourceIp
